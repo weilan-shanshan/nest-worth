@@ -1,33 +1,37 @@
 <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Nestworth">
   <defs>
-    <!-- 深翠绿渐变背景，从左上到右下 -->
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%"  stop-color="#1F5C39"/>
-      <stop offset="100%" stop-color="#0E3A22"/>
+      <stop offset="100%" stop-color="#0B2D1A"/>
     </linearGradient>
-    <!-- 古典金色渐变 -->
     <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#F2D896"/>
+      <stop offset="0%" stop-color="#F5DC9A"/>
       <stop offset="50%" stop-color="#D4B26C"/>
-      <stop offset="100%" stop-color="#A88543"/>
+      <stop offset="100%" stop-color="#9A7635"/>
+    </linearGradient>
+    <linearGradient id="goldLight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFE9B3"/>
+      <stop offset="100%" stop-color="#E8C480"/>
     </linearGradient>
   </defs>
 
-  <!-- 主体：深翠绿圆角矩形 -->
+  <!-- 深翠绿圆角矩形主体 -->
   <rect width="64" height="64" rx="14" fill="url(#bg)"/>
 
-  <!-- 双层金线装饰（古典徽章感） -->
-  <rect x="4" y="4" width="56" height="56" rx="10"
-        fill="none" stroke="url(#gold)" stroke-width="0.8" opacity="0.95"/>
-  <rect x="6.5" y="6.5" width="51" height="51" rx="8"
-        fill="none" stroke="url(#gold)" stroke-width="0.4" opacity="0.5"/>
+  <!-- 金色盾牌 -->
+  <path d="M 32 8 L 52 14 L 52 36 Q 52 48 32 56 Q 12 48 12 36 L 12 14 Z"
+        fill="url(#gold)"/>
+  <path d="M 32 12 L 48 17 L 48 35 Q 48 45 32 52 Q 16 45 16 35 L 16 17 Z"
+        fill="url(#bg)"/>
 
-  <!-- 衬线大写 N，老钱核心视觉 -->
-  <text x="32" y="46"
-        font-family="'Playfair Display', 'EB Garamond', 'Times New Roman', Georgia, serif"
-        font-size="42" font-weight="700"
-        fill="url(#gold)" text-anchor="middle" letter-spacing="-1">N</text>
+  <!-- 衬线大写 N -->
+  <text x="32" y="42"
+        font-family="'Playfair Display','Times New Roman',serif"
+        font-size="26" font-weight="700"
+        fill="url(#gold)" text-anchor="middle">N</text>
 
-  <!-- 底部小型饰条 -->
-  <rect x="22" y="52" width="20" height="0.7" fill="url(#gold)" opacity="0.7"/>
+  <!-- 顶部资产上扬折线 -->
+  <polyline points="18,7 22,5 27,6 33,4 40,5 46,3"
+            stroke="url(#goldLight)" stroke-width="1.7" fill="none"
+            stroke-linejoin="round" stroke-linecap="round"/>
 </svg>
