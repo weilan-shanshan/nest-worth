@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useAppStore } from '../store/assets';
 import AssetEditor from '../components/AssetEditor.vue';
 import ScreenshotImporter from '../components/ScreenshotImporter.vue';
@@ -51,16 +51,53 @@ const grouped = computed(() => {
     .sort((a, b) => b.total - a.total);
 });
 
-// 折叠状态（默认展开），按 group key 存
-const collapsed = ref<Record<string, boolean>>({});
-function toggleGroup(key: string) {
-  collapsed.value = { ...collapsed.value, [key]: !collapsed.value[key] };
+// 锚点导航：sticky chip 跳到对应分组
+const sectionRefs = ref<Record<string, HTMLElement | null>>({});
+const activeGroup = ref<string>('');
+let observer: IntersectionObserver | null = null;
+
+function setSectionRef(key: string, el: any) {
+  sectionRefs.value[key] = el;
 }
 
-// 大列表（>= 6）默认折叠，给用户一眼看到的能力
-function defaultCollapsed(count: number) {
-  return count >= 6;
+function scrollToGroup(key: string) {
+  activeGroup.value = key;
+  const el = sectionRefs.value[key];
+  if (!el) return;
+  // 给 sticky 锚点条留出空间
+  const top = el.getBoundingClientRect().top + (document.querySelector('main')?.scrollTop || 0) - 110;
+  document.querySelector('main')?.scrollTo({ top, behavior: 'smooth' });
 }
+
+// 滚动监听：高亮当前可见分组
+function setupObserver() {
+  observer?.disconnect();
+  observer = new IntersectionObserver(
+    (entries) => {
+      // 找最靠近视口顶部、且在视口内的 section
+      const visible = entries
+        .filter(e => e.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      if (visible.length) {
+        const key = (visible[0].target as HTMLElement).dataset.group;
+        if (key) activeGroup.value = key;
+      }
+    },
+    { root: document.querySelector('main'), rootMargin: '-100px 0px -60% 0px' }
+  );
+  Object.values(sectionRefs.value).forEach(el => el && observer!.observe(el));
+}
+
+onMounted(() => {
+  // 等 DOM 渲染完
+  setTimeout(setupObserver, 100);
+});
+
+watch(grouped, () => {
+  setTimeout(setupObserver, 100);
+});
+
+onBeforeUnmount(() => observer?.disconnect());
 
 function openEditor(a: Asset | null = null) {
   editing.value = a;
@@ -145,32 +182,54 @@ function mask(text: string) {
     </div>
 
     <!-- 资产列表 -->
-    <!-- 全部视图：按类型自动分组（同类多项可折叠） -->
-    <div v-if="grouped" class="flex flex-col gap-3">
-      <div v-for="g in grouped" :key="g.key" class="flex flex-col gap-2">
-        <button class="tap flex items-center gap-2 px-1 -mx-1"
-                @click="toggleGroup(g.key)">
-          <span class="px-1.5 h-4.5 inline-flex items-center rounded text-[10px] font-700"
-                :style="{ background: g.color + '20', color: g.color }">
+    <!-- 全部视图：按类型分组 + 顶部 sticky 锚点 -->
+    <template v-if="grouped">
+      <!-- Sticky 锚点导航条：横向滚动，点击跳到对应分组 -->
+      <div class="sticky top-0 z-10 -mx-4 px-4 py-2 bg-bg/90 backdrop-blur-sm">
+        <div class="flex gap-1.5 overflow-x-auto scroll-hide">
+          <button
+            v-for="g in grouped" :key="g.key"
+            class="tap shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-[11px] font-700 border transition-colors"
+            :class="activeGroup === g.key
+              ? 'bg-brand text-white border-brand'
+              : 'bg-card border-border text-ink-muted hover:text-ink'"
+            @click="scrollToGroup(g.key)"
+          >
+            <span class="w-1.5 h-1.5 rounded-full"
+                  :style="{ background: activeGroup === g.key ? '#fff' : g.color }" />
             {{ g.label }}
-          </span>
-          <span class="text-[11px] text-ink-muted">
-            {{ g.items.length }} 项 · ¥{{ mask(formatCompact(g.total)) }}
-          </span>
-          <span class="ml-auto text-ink-muted text-xs i-ph-caret-down-bold transition-transform"
-                :class="(collapsed[g.key] ?? defaultCollapsed(g.items.length)) ? '-rotate-90' : ''" />
-        </button>
-        <Transition name="fade">
-          <div v-if="!(collapsed[g.key] ?? defaultCollapsed(g.items.length))"
-               class="flex flex-col gap-1.5">
+            <span class="opacity-75 font-mono text-[10px]">¥{{ mask(formatCompact(g.total)) }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 分组列表（始终全展开） -->
+      <div class="flex flex-col gap-5">
+        <section v-for="g in grouped" :key="g.key"
+                 :ref="el => setSectionRef(g.key, el as any)"
+                 :data-group="g.key"
+                 class="flex flex-col gap-2">
+          <!-- 分组头：左侧彩色 dot + 名称，右侧合计金额 -->
+          <div class="flex items-center gap-2 px-1">
+            <span class="w-2 h-2 rounded-full shrink-0" :style="{ background: g.color }" />
+            <span class="font-700 text-[13px]" :style="{ color: g.color }">
+              {{ g.label }}
+            </span>
+            <span class="text-[11px] text-ink-muted">{{ g.items.length }} 项</span>
+            <span class="ml-auto font-brand font-700 text-[13px] text-ink">
+              ¥{{ mask(formatCompact(g.total)) }}
+            </span>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
             <AssetRow v-for="a in g.items" :key="a.id"
                       :asset="a"
                       :privacy-mode="store.settings.privacyMode"
                       @click="openEditor(a)" />
           </div>
-        </Transition>
+        </section>
       </div>
-    </div>
+    </template>
 
     <!-- 单类型视图：纯列表 -->
     <div v-else class="flex flex-col gap-1.5">
