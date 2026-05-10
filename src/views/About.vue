@@ -222,6 +222,51 @@ const promises = [
       </div>
     </section>
 
+    <!-- 支持的浏览器（PWA 安装兼容性）-->
+    <section class="card-base">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="i-ph-device-mobile-camera-duotone text-brand text-lg" />
+        <h3 class="font-700 text-[15px]">支持的浏览器（PWA 安装）</h3>
+      </div>
+      <div class="flex flex-col gap-2.5 text-[12px] leading-relaxed">
+        <div class="flex items-start gap-2">
+          <span class="text-pos shrink-0 mt-0.5 i-ph-check-circle-duotone text-base" />
+          <div class="flex-1">
+            <div class="font-700">📱 iOS</div>
+            <div class="text-ink-muted text-[11px]">Safari（系统自带，唯一选择） · 分享 → 添加到主屏</div>
+          </div>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-pos shrink-0 mt-0.5 i-ph-check-circle-duotone text-base" />
+          <div class="flex-1">
+            <div class="font-700">📱 Android</div>
+            <div class="text-ink-muted text-[11px]">
+              <b>推荐</b>：Edge · 夸克 · 小米浏览器 · 华为浏览器 · OPPO/vivo 浏览器 · Chrome
+            </div>
+          </div>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-pos shrink-0 mt-0.5 i-ph-check-circle-duotone text-base" />
+          <div class="flex-1">
+            <div class="font-700">💻 电脑</div>
+            <div class="text-ink-muted text-[11px]">
+              Edge · Chrome · Brave · 360 极速浏览器（极速模式）· 搜狗浏览器（高速模式）
+            </div>
+          </div>
+        </div>
+        <div class="flex items-start gap-2 mt-2 pt-2 border-t border-border">
+          <span class="text-neg shrink-0 mt-0.5 i-ph-x-circle-duotone text-base" />
+          <div class="flex-1">
+            <div class="font-700 text-neg">❌ 装不了的</div>
+            <div class="text-ink-muted text-[11px]">
+              微信 · QQ · 企业微信 · 钉钉 · 飞书 · 小红书 · 抖音内嵌浏览器（需在外部浏览器打开）<br/>
+              桌面 Safari · 桌面 Firefox · UC 浏览器旧版（暂不支持 PWA 安装）
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- 技术与开源 -->
     <section class="card-base">
       <div class="flex items-center gap-2 mb-2">
