@@ -1,5 +1,9 @@
 # Nestworth · 巢值
 
+[![Build](https://github.com/weilan-shanshan/nest-worth/actions/workflows/build.yml/badge.svg)](https://github.com/weilan-shanshan/nest-worth/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![PWA](https://img.shields.io/badge/PWA-ready-2E9E60)](https://web.dev/progressive-web-apps/)
+
 > **一切关乎"你值多少"的事，现在只在一个画面里完成。**
 >
 > 不必登录 · 不必交账户密码 · 不必再开 8 个 App

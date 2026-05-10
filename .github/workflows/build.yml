@@ -1,0 +1,39 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies (skip postinstall scripts)
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Type check
+        run: npx vue-tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify PWA artifacts
+        run: |
+          test -f dist/sw.js                    && echo "✓ sw.js"
+          test -f dist/manifest.webmanifest     && echo "✓ manifest.webmanifest"
+          test -f dist/icon-192.png             && echo "✓ icon-192.png"
+          test -f dist/icon-512.png             && echo "✓ icon-512.png"
+          test -f dist/icon-512-maskable.png    && echo "✓ icon-512-maskable.png"
+
+      - name: Bundle size report
+        run: du -sh dist/ && ls -lah dist/assets/ | head -10
