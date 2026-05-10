@@ -7,6 +7,16 @@
 
 把分散在各 App（银行 / 支付宝 / 券商 / 基金 / 加密钱包 / 房产 …）的资产汇成一处可视画面的 PWA。**100% 本地 · 零账号 · 零服务器**。
 
+<p align="center">
+  <img src="docs/screenshots/home.png" alt="总览：净值 + 月增长图 + 资产分组聚合" width="260"/>
+  <img src="docs/screenshots/trend.png" alt="走势：AI 持仓分析与建议" width="260"/>
+  <img src="docs/screenshots/goals.png" alt="目标：整体增值方案（含中国 + 全球）" width="260"/>
+</p>
+
+<p align="center">
+  <em>左：总览页 · 中：走势 + AI 持仓分析 · 右：目标 + AI 整体增值方案</em>
+</p>
+
 ---
 
 ## 为什么是 Nestworth
@@ -31,6 +41,15 @@ Nestworth 用 **DeepSeek-R1** 推理模型 + 实时市场数据：
 DeepSeek-R1 + Qwen-Max + DeepSeek-V3 多个顶级模型并行回答，再让最强者综合 — 去掉离群、保留共识。
 **相当于找了一组独立顾问开会，给你一个稳的方案。**
 
+<p align="center">
+  <img src="docs/screenshots/settings.png" alt="设置：理财分析模型链 + 交叉验证档位" width="320"/>
+  <img src="docs/screenshots/assets.png" alt="资产：突出名称 + 类型 chip + 金额" width="320"/>
+</p>
+
+<p align="center">
+  <em>左：模型链可启用/禁用、调整顺序、切换 N=1/2/3 交叉验证 · 右：资产明细页</em>
+</p>
+
 ### 📡 实时市场锚点 — AI 给的"年化 5-8%"不是瞎编
 某些 AI 顾问的年化预期是从训练数据里"拍脑袋"出来的。
 Nestworth 实时拉 **USD/CNY 汇率、BTC/ETH 行情、黄金价格**，把这些"市场锚点"喂给模型再分析。
@@ -45,8 +64,14 @@ Nestworth **没有服务器、没有账号、没有埋点**。所有数据存在
 
 ## 5 步开始用
 
+> 第一次进 app，**未配置 API Key 时全 app 都会引导你去走配置流程**（不是干巴巴的报错），并且申请 Key 这种专业操作有保姆级 4 步引导：
+
+<p align="center">
+  <img src="docs/screenshots/setup-key.png" alt="保姆级引导页 /setup-key" width="320"/>
+</p>
+
 1. **申请一个免费 API Key** — 去 [阿里云百炼控制台](https://bailian.console.aliyun.com/) 注册（5 分钟）。7 个视觉模型每个送 100 万 token，约够识别 3500 张截图。
-2. **把 Key 粘贴到「设置 → Qwen-VL API Key」** — Key 加密存在你浏览器，离开浏览器就消失。
+2. **把 Key 粘贴到「设置 → Qwen-VL API Key」** — 或直接走 `/setup-key` 引导页，会**真实调用一次 qwen-turbo 验证**你的 Key 是否有效。Key 加密存在你浏览器，离开浏览器就消失。
 3. **把分散的资产汇集进来** — 总览页两个大按钮：「截图识别」适合从 App 截图批量入账，「手动添加」适合定存、房产这类不变动的资产。
 4. **设个目标，听 AI 给方案** — 在「目标」页加一个目标（比如"年底总净值 600 万"），AI 立刻给出整体增值方案：现有优化 + 新增配置 + 时间表。
 5. **隔几天导出一次备份** — 「设置 → 导出备份」生成 JSON 文件 → 存到 iCloud Drive / 网盘 / 邮箱。换设备直接导回。
@@ -177,6 +202,22 @@ src/
 - [ ] **多目标对比** — 同时跟多个目标进度，AI 协调资源分配
 - [ ] **可选云同步** — 端到端加密的 Cloudflare D1 同步（默认关闭）
 - [ ] **PWA Service Worker** — 完整离线能力（当前只支持"添加到主屏"）
+
+---
+
+## 截图重新生成
+
+```bash
+# 1. 启动 dev server
+npm run dev
+
+# 2. 另一个终端
+npm install --no-save puppeteer-core
+node scripts/screenshots.mjs
+# → 输出到 docs/screenshots/*.png
+```
+
+脚本用系统 Chrome (`/Applications/Google Chrome.app/...`) headless 模式，无需额外下载浏览器。
 
 ---
 
