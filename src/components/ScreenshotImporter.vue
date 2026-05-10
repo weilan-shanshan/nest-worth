@@ -1,98 +1,163 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import Modal from './Modal.vue';
 import AssetIcon from './AssetIcon.vue';
 import { recognizeAssetScreenshot, MODEL_CHAIN, type RecognizedAsset } from '../lib/recognize';
+import { matchRecognized, type MatchResult } from '../lib/asset-match';
 import { useAppStore } from '../store/assets';
 import { CATEGORY_MAP } from '../lib/asset-meta';
-import { formatMoney } from '../lib/format';
-
-const router = useRouter();
+import { formatCompact } from '../lib/format';
 
 defineProps<{ open: boolean }>();
 const emit = defineEmits<{
   (e: 'close'): void;
+  // 老接口保留兼容；现在直接调用 store 的方法
   (e: 'import', items: RecognizedAsset[]): void;
 }>();
 
-const file = ref<File | null>(null);
-const previewUrl = ref<string | null>(null);
-const loading = ref(false);
-const error = ref<string | null>(null);
-const items = ref<RecognizedAsset[]>([]);
-const checked = ref<boolean[]>([]);
-const modelUsed = ref<string | null>(null);
-const newlyExhausted = ref<string[]>([]);
+const router = useRouter();
 const store = useAppStore();
 
-function modelLabel(name: string) {
-  return MODEL_CHAIN.find(m => m.name === name)?.label || name;
+const files = ref<File[]>([]);
+const previewUrls = ref<string[]>([]);
+const loading = ref(false);
+const progress = ref<{ current: number; total: number } | null>(null);
+const error = ref<string | null>(null);
+
+interface DecoratedItem extends MatchResult {
+  selected: boolean;
+  fileIndex: number;     // 来自第几张图
+  modelUsed?: string;
 }
+const items = ref<DecoratedItem[]>([]);
+const newlyExhausted = ref<Set<string>>(new Set());
 
 function pick(e: Event) {
-  const f = (e.target as HTMLInputElement).files?.[0];
-  if (!f) return;
-  file.value = f;
-  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
-  previewUrl.value = URL.createObjectURL(f);
-  items.value = [];
+  const fl = (e.target as HTMLInputElement).files;
+  if (!fl) return;
+  reset();
+  files.value = Array.from(fl);
+  previewUrls.value = files.value.map(f => URL.createObjectURL(f));
   error.value = null;
 }
 
 async function recognize() {
-  if (!file.value) return;
+  if (files.value.length === 0) return;
   loading.value = true;
   error.value = null;
-  modelUsed.value = null;
-  newlyExhausted.value = [];
+  items.value = [];
+  newlyExhausted.value = new Set();
+  progress.value = { current: 0, total: files.value.length };
+
   try {
-    const result = await recognizeAssetScreenshot(file.value);
-    items.value = result.items;
-    checked.value = result.items.map(() => true);
-    modelUsed.value = result.modelUsed;
-    newlyExhausted.value = result.newlyExhausted;
-    if (newlyExhausted.value.length) await store.refreshSettings();
-    if (result.items.length === 0) error.value = '未从图片中识别到任何资产';
+    for (let i = 0; i < files.value.length; i++) {
+      progress.value = { current: i + 1, total: files.value.length };
+      const f = files.value[i];
+      const res = await recognizeAssetScreenshot(f);
+      const matches = matchRecognized(res.items, store.assets);
+      const decorated: DecoratedItem[] = matches.map(m => ({
+        ...m,
+        selected: true,
+        fileIndex: i,
+        modelUsed: res.modelUsed
+      }));
+      items.value = [...items.value, ...decorated];
+      for (const m of res.newlyExhausted || []) newlyExhausted.value.add(m);
+    }
+    if (newlyExhausted.value.size) await store.refreshSettings();
+    if (items.value.length === 0) error.value = '未从任何图片中识别到资产';
   } catch (e: any) {
     error.value = e.message || '识别失败';
-    await store.refreshSettings();   // 即使全失败，也持久化了 exhausted 列表
+    await store.refreshSettings();
   } finally {
     loading.value = false;
+    progress.value = null;
   }
 }
 
-function confirmImport() {
-  const selected = items.value.filter((_, i) => checked.value[i]);
+const updateCount = computed(() => items.value.filter(x => x.selected && x.matchedAssetId).length);
+const newCount = computed(() => items.value.filter(x => x.selected && !x.matchedAssetId).length);
+
+async function confirmImport() {
+  const selected = items.value.filter(x => x.selected);
   if (selected.length === 0) return;
-  emit('import', selected);
+
+  // 分流：命中现有 → bulkUpdate；未命中 → addAsset
+  const updates: { id: number; patch: any }[] = [];
+  const news: RecognizedAsset[] = [];
+
+  for (const it of selected) {
+    if (it.matchedAssetId) {
+      updates.push({
+        id: it.matchedAssetId,
+        patch: {
+          balance: it.recognized.balance,
+          currency: it.recognized.currency || 'CNY',
+          dailyChange: it.recognized.dailyChange,
+          dailyChangePct: it.recognized.dailyChangePct,
+          ...(it.recognized.tickerSymbol ? {
+            tickerSymbol: it.recognized.tickerSymbol,
+            tickerType: it.recognized.tickerType
+          } : {}),
+          ...(it.recognized.shares ? { shares: it.recognized.shares } : {}),
+          ...(it.recognized.cost ? { cost: it.recognized.cost } : {})
+        }
+      });
+    } else {
+      news.push(it.recognized);
+    }
+  }
+
+  if (updates.length) await store.bulkUpdate(updates);
+  for (const n of news) {
+    await store.addAsset({
+      name: n.name,
+      platform: n.platform,
+      category: n.category,
+      balance: n.balance,
+      currency: n.currency || 'CNY',
+      cost: n.cost,
+      dailyChange: n.dailyChange,
+      dailyChangePct: n.dailyChangePct,
+      note: n.note,
+      tickerSymbol: n.tickerSymbol,
+      tickerType: n.tickerType,
+      shares: n.shares
+    });
+  }
   reset();
+  emit('close');
 }
 
 function reset() {
-  file.value = null;
-  if (previewUrl.value) { URL.revokeObjectURL(previewUrl.value); previewUrl.value = null; }
+  files.value = [];
+  previewUrls.value.forEach(u => URL.revokeObjectURL(u));
+  previewUrls.value = [];
   items.value = [];
-  checked.value = [];
+  newlyExhausted.value = new Set();
   error.value = null;
-  modelUsed.value = null;
-  newlyExhausted.value = [];
-}
-
-function goSetup() {
-  emit('close');
-  router.push({ path: '/setup-key', query: { from: '/' } });
+  progress.value = null;
 }
 
 function close() {
   reset();
   emit('close');
 }
+
+function modelLabel(name?: string) {
+  return MODEL_CHAIN.find(m => m.name === name)?.label || name || '';
+}
+
+function goSetup() {
+  emit('close');
+  router.push({ path: '/setup-key', query: { from: '/' } });
+}
 </script>
 
 <template>
-  <Modal :open="open" title="截图识别资产" @close="close">
-    <!-- 未配置 Key 时：替换为引导视图 -->
+  <Modal :open="open" title="截图识别资产（支持多张）" @close="close">
+    <!-- 未配置 Key 引导 -->
     <div v-if="!store.hasApiKey" class="flex flex-col gap-4">
       <div class="rounded-card bg-gradient-to-br from-orange to-[#E58A0F] text-white p-5">
         <div class="flex items-center gap-2 mb-2">
@@ -101,90 +166,114 @@ function close() {
         </div>
         <p class="text-[12px] opacity-90 leading-relaxed">
           阿里云百炼新用户每个视觉模型送 100 万 token 免费额度，<br/>
-          约够识别 <b>3500+ 张</b>截图，<b>完全免费起步</b>。
+          约够识别 <b>3500+ 张</b>截图。
         </p>
       </div>
-
-      <div class="bg-bg/60 rounded-icon p-3 text-[12px] text-ink-muted leading-relaxed">
-        <div class="font-700 text-ink mb-1.5">5 分钟流程：</div>
-        <div class="flex gap-2 mb-1"><span class="text-brand">①</span> 注册阿里云账号（已有可跳过）</div>
-        <div class="flex gap-2 mb-1"><span class="text-brand">②</span> 进入百炼控制台开通服务</div>
-        <div class="flex gap-2 mb-1"><span class="text-brand">③</span> 创建 sk- 开头的 API Key</div>
-        <div class="flex gap-2"><span class="text-brand">④</span> 粘贴到这里 → 立即生效</div>
-      </div>
-
-      <button
-        class="tap h-12 rounded-icon bg-brand text-white font-700 text-sm flex items-center justify-center gap-2"
-        @click="goSetup"
-      >
+      <button class="tap h-12 rounded-icon bg-brand text-white font-700 text-sm flex items-center justify-center gap-2"
+              @click="goSetup">
         <span class="i-ph-rocket-launch-duotone text-base" />
         开始配置（带保姆级引导）
       </button>
-
       <button class="tap text-[11px] text-ink-muted font-600 py-1" @click="close">先关闭</button>
     </div>
 
-    <!-- 已配置：原有的识别流程 -->
+    <!-- 已配置：多图识别 + 智能合并 -->
     <div v-else class="flex flex-col gap-4">
       <p class="text-xs text-ink-muted leading-relaxed">
-        上传银行/支付宝/券商 App 截图，AI 自动识别资产并填入。
+        一次可选多张截图（招行、支付宝、富途、币安都行）— AI 识别后自动匹配现有资产，
+        <b class="text-brand">命中则更新余额</b>，未命中走<b class="text-orange">新建</b>。
       </p>
 
-      <label class="block tap rounded-card border-2 border-dashed border-border bg-brand-50/40 p-6 text-center cursor-pointer">
-        <input type="file" accept="image/*" class="hidden" @change="pick" />
-        <div v-if="!previewUrl" class="flex flex-col items-center gap-2 text-ink-muted">
-          <span class="i-ph-image-square-duotone text-4xl text-brand" />
-          <span class="text-sm font-600">选择截图</span>
-          <span class="text-[11px]">支持 JPG / PNG · 单张</span>
+      <!-- 选图区 -->
+      <label class="block tap rounded-card border-2 border-dashed border-border bg-brand-50/40 p-5 text-center cursor-pointer">
+        <input type="file" accept="image/*" multiple class="hidden" @change="pick" />
+        <div v-if="previewUrls.length === 0" class="flex flex-col items-center gap-2 text-ink-muted">
+          <span class="i-ph-images-square-duotone text-4xl text-brand" />
+          <span class="text-sm font-600">选择 1 张或多张截图</span>
+          <span class="text-[11px]">JPG / PNG · 长按多选</span>
         </div>
-        <img v-else :src="previewUrl" class="max-h-48 mx-auto rounded-icon" />
+        <div v-else class="flex gap-1.5 overflow-x-auto scroll-hide -mx-2 px-2">
+          <img v-for="(u, i) in previewUrls" :key="i"
+               :src="u" class="h-24 w-auto rounded-icon shrink-0" />
+        </div>
+        <div v-if="previewUrls.length > 1" class="text-[11px] text-brand font-600 mt-2">
+          已选 {{ previewUrls.length }} 张
+        </div>
       </label>
 
-      <button
-        v-if="file && items.length === 0"
-        class="tap h-12 rounded-icon bg-brand text-white font-700 disabled:opacity-50"
-        :disabled="loading"
-        @click="recognize"
-      >
-        <span v-if="!loading">开始识别</span>
+      <button v-if="files.length && items.length === 0"
+              class="tap h-12 rounded-icon bg-brand text-white font-700 disabled:opacity-50"
+              :disabled="loading"
+              @click="recognize">
+        <span v-if="!loading">开始识别 {{ files.length }} 张</span>
         <span v-else class="flex items-center justify-center gap-2">
           <span class="i-ph-spinner-gap-bold text-lg animate-spin" />
-          识别中…
+          识别中
+          <span v-if="progress">({{ progress.current }}/{{ progress.total }})</span>
         </span>
       </button>
 
-      <div v-if="error" class="text-xs text-neg bg-neg/10 px-3 py-2 rounded-icon whitespace-pre-wrap leading-relaxed">
+      <div v-if="error"
+           class="text-xs text-neg bg-neg/10 px-3 py-2 rounded-icon whitespace-pre-wrap leading-relaxed">
         {{ error }}
       </div>
 
-      <div v-if="newlyExhausted.length" class="text-[11px] text-orange bg-orange/10 px-3 py-2 rounded-icon leading-relaxed">
-        ⚡ 自动跳过了已耗尽免费额度的模型：<br/>
-        {{ newlyExhausted.map(modelLabel).join('、') }}
+      <div v-if="newlyExhausted.size"
+           class="text-[11px] text-orange bg-orange/10 px-3 py-2 rounded-icon leading-relaxed">
+        ⚡ 自动跳过额度已耗尽：{{ Array.from(newlyExhausted).map(modelLabel).join('、') }}
       </div>
 
-      <div v-if="modelUsed && items.length" class="text-[11px] text-ink-muted px-1">
-        ✓ 由 <span class="text-brand font-600">{{ modelLabel(modelUsed) }}</span> 识别
-      </div>
-
+      <!-- 识别结果（含匹配状态） -->
       <div v-if="items.length" class="flex flex-col gap-2">
-        <div class="text-xs text-ink-muted font-600">识别到 {{ items.length }} 项，勾选要导入的：</div>
-        <label
-          v-for="(it, i) in items" :key="i"
-          class="tap flex items-center gap-3 p-3 rounded-row border border-border bg-white"
-        >
-          <input type="checkbox" v-model="checked[i]" class="w-4 h-4 accent-brand" />
-          <AssetIcon :category="it.category" :size="36" />
+        <div class="flex items-center justify-between text-[11px] text-ink-muted px-1">
+          <span>共识别 {{ items.length }} 项</span>
+          <span class="flex gap-2">
+            <span class="text-brand">🔄 更新 {{ updateCount }}</span>
+            <span class="text-orange">+ 新建 {{ newCount }}</span>
+          </span>
+        </div>
+
+        <label v-for="(it, i) in items" :key="i"
+               class="tap flex items-center gap-2.5 p-2.5 rounded-row border border-border bg-white">
+          <input type="checkbox" v-model="it.selected" class="w-4 h-4 accent-brand shrink-0" />
+          <AssetIcon :category="it.recognized.category" :size="34" />
           <div class="flex-1 min-w-0">
-            <div class="font-600 text-sm truncate">{{ it.name }}</div>
-            <div class="text-[11px] text-ink-muted">{{ it.platform || CATEGORY_MAP[it.category].label }}</div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="font-700 text-[13px] truncate">{{ it.recognized.name }}</span>
+              <span v-if="it.matchedAssetId"
+                    class="px-1.5 h-4 inline-flex items-center rounded text-[9px] font-700 bg-brand/15 text-brand">
+                🔄 更新
+              </span>
+              <span v-else
+                    class="px-1.5 h-4 inline-flex items-center rounded text-[9px] font-700 bg-orange/15 text-orange">
+                + 新建
+              </span>
+              <span v-if="it.recognized.tickerSymbol"
+                    class="px-1.5 h-4 inline-flex items-center rounded text-[9px] font-mono bg-blue/10 text-blue">
+                {{ it.recognized.tickerSymbol }}
+              </span>
+            </div>
+            <div class="text-[10px] text-ink-muted truncate">
+              {{ it.recognized.platform || CATEGORY_MAP[it.recognized.category].label }}
+              <template v-if="it.matchedAsset">
+                · 原 ¥{{ formatCompact(it.matchedAsset.balance) }}
+              </template>
+            </div>
           </div>
-          <div class="font-brand text-base">{{ formatMoney(it.balance) }}</div>
+          <div class="text-right shrink-0">
+            <div class="font-brand font-700 text-[13px]">¥{{ formatCompact(it.recognized.balance) }}</div>
+            <div v-if="it.matchedAsset && it.matchedAsset.balance !== it.recognized.balance"
+                 class="text-[9px] font-700"
+                 :class="it.recognized.balance > it.matchedAsset.balance ? 'text-pos' : 'text-neg'">
+              {{ it.recognized.balance > it.matchedAsset.balance ? '+' : '' }}{{ formatCompact(it.recognized.balance - it.matchedAsset.balance) }}
+            </div>
+          </div>
         </label>
 
-        <button
-          class="tap mt-2 h-12 rounded-icon bg-brand text-white font-700"
-          @click="confirmImport"
-        >导入 {{ checked.filter(Boolean).length }} 项</button>
+        <button class="tap mt-2 h-12 rounded-icon bg-brand text-white font-700"
+                @click="confirmImport">
+          确认（{{ items.filter(x => x.selected).length }}）
+        </button>
       </div>
     </div>
   </Modal>

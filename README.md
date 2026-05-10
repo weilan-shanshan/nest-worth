@@ -209,9 +209,30 @@ src/
 
 ---
 
-## 路线图
+## 自动行情同步（基金 / 股票）
 
-- [ ] **Cloudflare Worker 代理** — 接 A 股 / 美股 / 港股实时报价（腾讯、新浪不给 CORS，需 worker 代理）
+给资产配「行情代码」后，系统每天自动拉最新价 × 持仓数 = 余额，**无需手动维护**。
+
+| 资产类型 | 数据源 | 是否需要 CF Worker |
+|---|---|---|
+| 加密货币 (BTC/ETH/SOL...) | CoinGecko 直连 | ❌ 直连 |
+| A 股 / 港股 / 美股 | 腾讯股票 | ✅ 需要 |
+| 国内基金 | 天天基金 | ✅ 需要 |
+
+### 部署 CF Worker（5 分钟，免费）
+
+```bash
+# 1. 登 https://dash.cloudflare.com → Workers & Pages → Create → Worker
+# 2. 把 worker/quotes-proxy.js 整个粘进编辑器 → Deploy
+# 3. 拿到 Worker URL（如 https://nestworth-quotes.you.workers.dev）
+# 4. CF Pages 项目 → Settings → Environment variables 加：
+#    VITE_QUOTE_PROXY = <Worker URL>
+# 5. Pages → Deployments → Retry deployment 触发 redeploy
+```
+
+之后给资产编辑面板里填行情代码（如 `600519` / `AAPL` / `008888`）+ 持仓数量，App 启动时自动拉新价。
+
+## 路线图
 - [ ] **个人画像** — 设置页加年龄、收入、风险偏好，让 AI 推荐更贴合
 - [ ] **多目标对比** — 同时跟多个目标进度，AI 协调资源分配
 - [ ] **可选云同步** — 端到端加密的 Cloudflare D1 同步（默认关闭）

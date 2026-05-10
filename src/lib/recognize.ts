@@ -11,6 +11,10 @@ export interface RecognizedAsset {
   dailyChange?: number;
   dailyChangePct?: number;
   note?: string;
+  // 行情代码（用于自动更新）
+  tickerSymbol?: string;
+  tickerType?: 'cn-stock' | 'hk-stock' | 'us-stock' | 'cn-fund' | 'crypto' | 'forex' | 'metal' | 'none';
+  shares?: number;
 }
 
 export interface RecognizeResult {
@@ -74,6 +78,14 @@ const SYSTEM_PROMPT = `你是一个金融资产识别助手。用户会上传一
 - cost: 持仓成本（可选）
 - dailyChange: 当日涨跌金额（可选，正为涨负为跌）
 - dailyChangePct: 当日涨跌百分比数字（如 +1.23 写 1.23，-0.5 写 -0.5）
+- tickerSymbol: 行情代码（可选，能识别就给）：
+   * A 股：6 位数字（如 600519、000001）
+   * 港股：5 位数字（如 00700）
+   * 美股：英文字母（如 AAPL、TSLA、QQQ）
+   * 国内基金：6 位数字（如 008888、110011）
+   * 加密：BTC / ETH / SOL 等
+- tickerType: 与 tickerSymbol 对应：cn-stock | hk-stock | us-stock | cn-fund | crypto | forex | metal
+- shares: 持仓数量（股 / 份）
 - note: 任何额外说明（可选）
 
 严格只输出 JSON，结构：{"items": [<RecognizedAsset>, ...]}。
@@ -247,11 +259,17 @@ const VALID_CATS: AssetCategory[] = [
   'cash', 'deposit', 'fund', 'stock', 'crypto', 'realestate', 'insurance', 'receivable', 'other'
 ];
 
+const VALID_TICKER_TYPES = ['cn-stock', 'hk-stock', 'us-stock', 'cn-fund', 'crypto', 'forex', 'metal'];
+
 function normalize(raw: any): RecognizedAsset | null {
   if (!raw || typeof raw !== 'object') return null;
   const balance = Number(raw.balance);
   if (!Number.isFinite(balance)) return null;
   const cat = VALID_CATS.includes(raw.category) ? raw.category : 'other';
+  const ticker = typeof raw.tickerSymbol === 'string' ? raw.tickerSymbol.trim().toUpperCase() : undefined;
+  const tickerType = typeof raw.tickerType === 'string' && VALID_TICKER_TYPES.includes(raw.tickerType)
+    ? raw.tickerType
+    : undefined;
   return {
     platform: typeof raw.platform === 'string' ? raw.platform : undefined,
     name: String(raw.name || raw.platform || '未命名资产').trim(),
@@ -261,7 +279,10 @@ function normalize(raw: any): RecognizedAsset | null {
     cost: numOrUndef(raw.cost),
     dailyChange: numOrUndef(raw.dailyChange),
     dailyChangePct: numOrUndef(raw.dailyChangePct),
-    note: typeof raw.note === 'string' ? raw.note : undefined
+    note: typeof raw.note === 'string' ? raw.note : undefined,
+    tickerSymbol: ticker || undefined,
+    tickerType: tickerType as any,
+    shares: numOrUndef(raw.shares)
   };
 }
 

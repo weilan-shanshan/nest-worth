@@ -4,6 +4,7 @@ import { useAppStore } from '../store/assets';
 import AssetIcon from '../components/AssetIcon.vue';
 import AssetEditor from '../components/AssetEditor.vue';
 import ScreenshotImporter from '../components/ScreenshotImporter.vue';
+import AssetBatchEditor from '../components/AssetBatchEditor.vue';
 import { CATEGORIES, CATEGORY_MAP } from '../lib/asset-meta';
 import { formatMoney, formatPct, formatCompact } from '../lib/format';
 import type { Asset, AssetCategory } from '../types';
@@ -13,6 +14,7 @@ const filter = ref<AssetCategory | 'all'>('all');
 const editorOpen = ref(false);
 const editing = ref<Asset | null>(null);
 const importerOpen = ref(false);
+const batchOpen = ref(false);
 
 const visibleCats = computed(() => {
   const used = new Set(store.assets.map(a => a.category));
@@ -64,6 +66,12 @@ function mask(text: string) {
     <header class="flex items-center justify-between">
       <h1 class="font-brand font-600 text-2xl">资产</h1>
       <div class="flex gap-2">
+        <button v-if="store.assets.length > 0"
+                class="tap h-10 px-3 rounded-full bg-card border border-border flex items-center gap-1.5 text-brand text-[12px] font-700"
+                @click="batchOpen = true">
+          <span class="i-ph-list-numbers-duotone text-base" />
+          批量更新
+        </button>
         <button class="tap w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center text-brand"
                 @click="importerOpen = true">
           <span class="i-ph-camera-duotone text-lg" />
@@ -145,4 +153,5 @@ function mask(text: string) {
 
   <AssetEditor :open="editorOpen" :initial="editing" @close="editorOpen = false" @save="onSave" @delete="onDelete" />
   <ScreenshotImporter :open="importerOpen" @close="importerOpen = false" @import="onImport" />
+  <AssetBatchEditor :open="batchOpen" @close="batchOpen = false" />
 </template>

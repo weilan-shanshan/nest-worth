@@ -6,6 +6,7 @@ import { db, updateAnalystConfig } from '../db';
 import { MODEL_CHAIN, ANALYST_CHAIN, resetExhaustedModels, setPreferredModel } from '../lib/recognize';
 import { clearAdviceCache } from '../lib/advisor';
 import InstallEntryCard from '../components/InstallEntryCard.vue';
+import { isQuoteProxyConfigured } from '../lib/quotes';
 
 const router = useRouter();
 
@@ -139,6 +140,24 @@ async function resetAnalystConfig() {
 
 function ratingDots(n: number) {
   return '●'.repeat(n) + '○'.repeat(5 - n);
+}
+
+const tickerCount = computed(() => store.assets.filter(a => a.tickerSymbol && a.tickerType !== 'none').length);
+const proxyOn = isQuoteProxyConfigured();
+const lastQuoteAt = computed(() => store.quotesLastResult?.at);
+
+async function manualRefreshQuotes() {
+  const r = await store.refreshQuotes();
+  toast(`已刷新 ${r.updated} 项${r.skipped ? ` · ${r.skipped} 项失败` : ''}`);
+}
+
+function formatRel(ts?: number) {
+  if (!ts) return '从未';
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return '刚刚';
+  if (diff < 3600_000) return `${Math.round(diff / 60_000)} 分钟前`;
+  if (diff < 86400_000) return `${Math.round(diff / 3600_000)} 小时前`;
+  return `${Math.round(diff / 86400_000)} 天前`;
 }
 
 function toast(msg: string) {
@@ -303,6 +322,44 @@ function toast(msg: string) {
               @click="resetAnalystConfig">
         恢复默认顺序和启用
       </button>
+    </section>
+
+    <!-- 自动行情同步 -->
+    <section class="card-base">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="i-ph-currency-circle-dollar-duotone text-brand text-lg" />
+        <h3 class="font-700 text-[15px]">自动行情同步</h3>
+        <span class="ml-auto inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-700"
+              :class="proxyOn ? 'bg-pos/15 text-pos' : 'bg-orange/15 text-orange'">
+          <span :class="proxyOn ? 'i-ph-check-circle-duotone' : 'i-ph-warning-circle-duotone'" />
+          {{ proxyOn ? 'Worker 已配' : '仅加密货币' }}
+        </span>
+      </div>
+      <p class="text-[11px] text-ink-muted leading-relaxed mb-3">
+        给资产配「行情代码」后系统每天自动拉最新价 × 持仓数 = 余额。
+        当前 <b class="text-brand">{{ tickerCount }}</b> 项资产已绑定代码 · 上次刷新 {{ formatRel(lastQuoteAt) }}
+      </p>
+
+      <button class="tap w-full h-10 rounded-icon bg-brand text-white text-[13px] font-700 flex items-center justify-center gap-1.5 mb-2 disabled:opacity-50"
+              :disabled="store.quotesRefreshing"
+              @click="manualRefreshQuotes">
+        <span :class="store.quotesRefreshing ? 'i-ph-spinner-gap-bold animate-spin' : 'i-ph-arrows-clockwise-bold'" class="text-base" />
+        {{ store.quotesRefreshing ? '刷新中…' : '立即刷新所有行情' }}
+      </button>
+
+      <div v-if="!proxyOn" class="bg-orange/8 rounded-icon p-2.5 text-[11px] leading-relaxed">
+        <div class="font-700 text-orange mb-1">⚙️ 想拉 A 股 / 港股 / 美股 / 国内基金价</div>
+        <div class="text-ink-muted">
+          需要部署一个 Cloudflare Worker 代理（绕过 CORS）。
+          <b class="text-ink">5 分钟搞定，免费</b>：
+        </div>
+        <ol class="text-ink-muted mt-1.5 ml-3 list-decimal space-y-0.5">
+          <li>仓库的 <code class="font-mono text-[10px] bg-bg/60 px-1 rounded">worker/quotes-proxy.js</code> 整个粘到 CF Workers 部署</li>
+          <li>拿到 Worker URL（如 https://xxx.workers.dev）</li>
+          <li>CF Pages 项目环境变量加 <code class="font-mono text-[10px] bg-bg/60 px-1 rounded">VITE_QUOTE_PROXY=&lt;Worker URL&gt;</code></li>
+          <li>Pages 触发 redeploy 即可</li>
+        </ol>
+      </div>
     </section>
 
     <!-- 识别模型链 -->

@@ -5,7 +5,11 @@ import AppShell from './components/AppShell.vue';
 import PWAInstallPrompt from './components/PWAInstallPrompt.vue';
 
 const store = useAppStore();
-onMounted(() => store.load());
+onMounted(async () => {
+  await store.load();
+  // 后台静默刷新行情（如果距上次 > 4h）
+  store.maybeRefreshQuotes();
+});
 </script>
 
 <template>

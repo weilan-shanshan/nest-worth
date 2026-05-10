@@ -9,6 +9,8 @@ export type AssetCategory =
   | 'receivable'  // 应收/借出
   | 'other';
 
+export type TickerType = 'cn-stock' | 'hk-stock' | 'us-stock' | 'cn-fund' | 'crypto' | 'forex' | 'metal' | 'none';
+
 export interface Asset {
   id?: number;
   name: string;             // 招商银行储蓄卡
@@ -20,6 +22,14 @@ export interface Asset {
   dailyChange?: number;     // 当日涨跌（金额）
   dailyChangePct?: number;  // 当日涨跌幅 %
   note?: string;
+
+  // 自动行情同步（基金/股票/加密）
+  tickerSymbol?: string;    // 600519 / AAPL / 008888 / BTC / 0700.HK
+  tickerType?: TickerType;
+  shares?: number;          // 持仓数量（股/份）
+  lastQuoteAt?: number;     // 上次行情更新时间戳
+  lastQuotePrice?: number;  // 上次更新时的单位价格
+
   createdAt: number;
   updatedAt: number;
 }

@@ -21,7 +21,10 @@ const form = reactive({
   cost: undefined as number | undefined,
   dailyChange: undefined as number | undefined,
   dailyChangePct: undefined as number | undefined,
-  note: ''
+  note: '',
+  tickerSymbol: '',
+  tickerType: 'none' as 'cn-stock' | 'hk-stock' | 'us-stock' | 'cn-fund' | 'crypto' | 'none',
+  shares: undefined as number | undefined
 });
 
 watch(() => props.open, (o) => {
@@ -30,7 +33,8 @@ watch(() => props.open, (o) => {
       name: '', platform: '', category: 'cash',
       balance: 0, currency: 'CNY',
       cost: undefined, dailyChange: undefined, dailyChangePct: undefined,
-      note: ''
+      note: '',
+      tickerSymbol: '', tickerType: 'none', shares: undefined
     });
     if (props.initial) Object.assign(form, props.initial);
   }
@@ -47,7 +51,10 @@ function save() {
     cost: form.cost,
     dailyChange: form.dailyChange,
     dailyChangePct: form.dailyChangePct,
-    note: form.note?.trim() || undefined
+    note: form.note?.trim() || undefined,
+    tickerSymbol: form.tickerSymbol?.trim().toUpperCase() || undefined,
+    tickerType: form.tickerType === 'none' ? undefined : form.tickerType as any,
+    shares: form.shares
   });
 }
 </script>
@@ -97,6 +104,38 @@ function save() {
       <Field label="持仓成本 (可选)">
         <input v-model.number="form.cost" type="number" step="0.01" class="field-input" />
       </Field>
+
+      <!-- 行情自动更新（基金/股票/加密） -->
+      <div class="bg-bg/60 rounded-icon p-3 flex flex-col gap-3">
+        <div class="flex items-center gap-1.5 text-[11px] text-ink-muted font-700">
+          <span class="i-ph-currency-circle-dollar-duotone text-brand text-sm" />
+          自动行情同步（可选 · 留空就手动维护）
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <Field label="行情代码">
+            <input v-model="form.tickerSymbol" placeholder="600519 / AAPL / 008888 / BTC"
+                   class="field-input uppercase font-mono" maxlength="20" />
+          </Field>
+          <Field label="市场">
+            <select v-model="form.tickerType" class="field-input">
+              <option value="none">不启用</option>
+              <option value="cn-stock">A 股</option>
+              <option value="hk-stock">港股</option>
+              <option value="us-stock">美股</option>
+              <option value="cn-fund">国内基金</option>
+              <option value="crypto">加密货币</option>
+            </select>
+          </Field>
+        </div>
+        <Field v-if="form.tickerType !== 'none'" label="持仓数量（股 / 份）">
+          <input v-model.number="form.shares" type="number" step="0.0001"
+                 placeholder="100" class="field-input" />
+        </Field>
+        <p class="text-[10px] text-ink-muted leading-relaxed">
+          配置后系统每天自动拉最新价 × 持仓数量 = 余额。<br/>
+          A 股 / 港股 / 美股 / 国内基金需部署 Cloudflare Worker 代理（见 README）。加密货币直连 CoinGecko 免配。
+        </p>
+      </div>
 
       <Field label="备注 (可选)">
         <textarea v-model="form.note" rows="2" class="field-input resize-none" />

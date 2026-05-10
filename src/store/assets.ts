@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { db, getOrInitSettings, updateSettings } from '../db';
 import type { Asset, AssetCategory, Goal, Settings, Snapshot } from '../types';
 import { todayStr } from '../lib/format';
+import { refreshAssetQuotes } from '../lib/quotes';
 
 export const useAppStore = defineStore('app', () => {
   const assets = ref<Asset[]>([]);
@@ -79,6 +80,23 @@ export const useAppStore = defineStore('app', () => {
     await ensureTodaySnapshot(true);
   }
 
+  async function bulkUpdate(updates: { id: number; patch: Partial<Asset> }[]) {
+    if (updates.length === 0) return;
+    const now = Date.now();
+    await db.transaction('rw', db.assets, async () => {
+      for (const u of updates) {
+        await db.assets.update(u.id, { ...u.patch, updatedAt: now });
+      }
+    });
+    // 内存同步
+    const map = new Map(updates.map(u => [u.id, u.patch]));
+    assets.value = assets.value.map(a => {
+      const p = map.get(a.id!);
+      return p ? { ...a, ...p, updatedAt: now } : a;
+    });
+    await ensureTodaySnapshot(true);
+  }
+
   async function ensureTodaySnapshot(force = false) {
     const today = todayStr();
     const existing = await db.snapshots.where('date').equals(today).first();
@@ -124,6 +142,32 @@ export const useAppStore = defineStore('app', () => {
 
   async function refreshSettings() {
     settings.value = await getOrInitSettings();
+  }
+
+  /** 拉所有有 ticker 的资产最新价 → 自动更新 balance */
+  const quotesRefreshing = ref(false);
+  const quotesLastResult = ref<{ updated: number; skipped: number; at: number } | null>(null);
+
+  async function refreshQuotes(): Promise<{ updated: number; skipped: number }> {
+    if (quotesRefreshing.value) return { updated: 0, skipped: 0 };
+    quotesRefreshing.value = true;
+    try {
+      const { updates, skipped } = await refreshAssetQuotes(assets.value);
+      if (updates.length) await bulkUpdate(updates);
+      const result = { updated: updates.length, skipped: skipped.length };
+      quotesLastResult.value = { ...result, at: Date.now() };
+      return result;
+    } finally {
+      quotesRefreshing.value = false;
+    }
+  }
+
+  /** 自动调用：每次 load 后，如果距上次刷新 > 4 小时则后台静默刷一次 */
+  async function maybeRefreshQuotes() {
+    const FOUR_HOURS = 4 * 60 * 60 * 1000;
+    const last = quotesLastResult.value?.at || 0;
+    if (Date.now() - last < FOUR_HOURS) return;
+    refreshQuotes().catch(() => { /* 静默失败 */ });
   }
 
   async function exportAll() {
@@ -191,9 +235,10 @@ export const useAppStore = defineStore('app', () => {
   return {
     assets, snapshots, goals, settings, ready,
     totalNetWorth, dailyChange, dailyChangePct, byCategory, hasApiKey,
-    load, addAsset, updateAsset, deleteAsset,
+    load, addAsset, updateAsset, deleteAsset, bulkUpdate,
     addGoal, updateGoal, deleteGoal,
-    setApiKey, setPrivacy, refreshSettings, exportAll, importAll
+    setApiKey, setPrivacy, refreshSettings, exportAll, importAll,
+    refreshQuotes, maybeRefreshQuotes, quotesRefreshing, quotesLastResult
   };
 });
 
