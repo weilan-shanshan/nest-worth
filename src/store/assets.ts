@@ -197,20 +197,51 @@ export const useAppStore = defineStore('app', () => {
 
   async function seedDemo() {
     const now = Date.now();
+    // 起息日按"今天往前 8 个月"算，让到期倒计时合理
+    const today = new Date();
+    const startDate8mAgo = new Date(today.getFullYear(), today.getMonth() - 8, today.getDate())
+      .toISOString().slice(0, 10);
+    const startDate3mAgo = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate())
+      .toISOString().slice(0, 10);
+
     const demo: Omit<Asset, 'id'>[] = [
-      { name: '招行储蓄卡', platform: '招商银行', category: 'cash', balance: 38420.55, currency: 'CNY', dailyChange: 0, dailyChangePct: 0, createdAt: now, updatedAt: now },
-      { name: '余额宝', platform: '支付宝', category: 'cash', balance: 12300.18, currency: 'CNY', dailyChange: 1.23, dailyChangePct: 0.01, createdAt: now, updatedAt: now },
-      { name: '易方达蓝筹精选', platform: '蚂蚁财富', category: 'fund', balance: 56800.42, currency: 'CNY', cost: 50000, dailyChange: 234.5, dailyChangePct: 0.41, createdAt: now, updatedAt: now },
-      { name: '贵州茅台 600519', platform: '富途证券', category: 'stock', balance: 86230.0, currency: 'CNY', cost: 78000, dailyChange: -1240.0, dailyChangePct: -1.42, createdAt: now, updatedAt: now },
-      { name: '招行三年定期', platform: '招商银行', category: 'deposit', balance: 100000, currency: 'CNY', dailyChange: 0, dailyChangePct: 0, createdAt: now, updatedAt: now },
-      { name: '北京回龙观房产', category: 'realestate', balance: 4800000, currency: 'CNY', dailyChange: 0, dailyChangePct: 0, createdAt: now, updatedAt: now }
+      { name: '招行储蓄卡', platform: '招商银行', category: 'cash', balance: 38420.55, currency: 'CNY',
+        dailyChange: 0, dailyChangePct: 0, createdAt: now, updatedAt: now },
+      { name: '余额宝', platform: '支付宝', category: 'cash', balance: 12300.18, currency: 'CNY',
+        dailyChange: 1.23, dailyChangePct: 0.01, createdAt: now, updatedAt: now },
+
+      { name: '易方达蓝筹精选', platform: '蚂蚁财富', category: 'fund',
+        balance: 56800.42, currency: 'CNY', cost: 50000,
+        totalReturn: 6800.42, annualizedReturn: 13.6,
+        dailyChange: 234.5, dailyChangePct: 0.41,
+        tickerSymbol: '005827', tickerType: 'cn-fund',
+        createdAt: now, updatedAt: now },
+
+      { name: '贵州茅台 600519', platform: '富途证券', category: 'stock',
+        balance: 86230.0, currency: 'CNY', cost: 78000,
+        shares: 50,
+        dailyChange: -1240.0, dailyChangePct: -1.42,
+        tickerSymbol: '600519', tickerType: 'cn-stock',
+        createdAt: now, updatedAt: now },
+
+      { name: '招行三年定期', platform: '招商银行', category: 'deposit',
+        balance: 100000, currency: 'CNY',
+        termMonths: 36, interestRate: 3.5, startDate: startDate8mAgo,
+        createdAt: now, updatedAt: now },
+
+      { name: '招银理财月月利', platform: '招商银行', category: 'wealth',
+        balance: 80000, currency: 'CNY',
+        termMonths: 12, interestRate: 3.2, startDate: startDate3mAgo,
+        createdAt: now, updatedAt: now },
+
+      { name: '北京回龙观房产', category: 'realestate', balance: 4800000, currency: 'CNY',
+        dailyChange: 0, dailyChangePct: 0, createdAt: now, updatedAt: now }
     ];
     const ids = await db.assets.bulkAdd(demo as any, { allKeys: true });
     assets.value = demo.map((d, i) => ({ ...d, id: ids[i] as number })) as Asset[];
 
     // 7 个月历史快照（用于柱状图）
     const months = 7;
-    const today = new Date();
     const historic: Snapshot[] = [];
     let base = 4800000 + 280000;
     for (let i = months - 1; i >= 0; i--) {
@@ -226,7 +257,7 @@ export const useAppStore = defineStore('app', () => {
       name: '年底总净值 600 万',
       target: 6000000,
       current: totalNetWorth.value,
-      deadline: `${today.getFullYear()}-12-31`,
+      deadline: `${new Date().getFullYear()}-12-31`,
       createdAt: now
     });
     goals.value = await db.goals.toArray();
