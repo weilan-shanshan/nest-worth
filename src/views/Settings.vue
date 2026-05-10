@@ -5,6 +5,7 @@ import { useAppStore } from '../store/assets';
 import { db, updateAnalystConfig } from '../db';
 import { MODEL_CHAIN, ANALYST_CHAIN, resetExhaustedModels, setPreferredModel } from '../lib/recognize';
 import { clearAdviceCache } from '../lib/advisor';
+import InstallEntryCard from '../components/InstallEntryCard.vue';
 
 const router = useRouter();
 
@@ -152,6 +153,9 @@ function toast(msg: string) {
       <h1 class="font-brand font-600 text-2xl">设置</h1>
       <p class="text-xs text-ink-muted mt-1">数据全部保存在本设备 IndexedDB，不上传任何服务器</p>
     </header>
+
+    <!-- 安装到主屏（PWA 入口） -->
+    <InstallEntryCard />
 
     <!-- 使用说明（顶置入口）-->
     <button

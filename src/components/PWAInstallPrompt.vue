@@ -1,58 +1,45 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
+import { pwaInstall } from '../lib/pwa-install';
 
 const DISMISS_KEY = 'nestworth.pwa.dismissed';
 
-const deferredPrompt = ref<any>(null);
 const showPrompt = ref(false);
 const isIOS = ref(false);
-const isStandalone = ref(false);
 const showIOSGuide = ref(false);
 
 onMounted(() => {
-  // 已经"添加到主屏"运行
-  isStandalone.value =
-    window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as any).standalone === true;
-  if (isStandalone.value) return;
+  if (pwaInstall.isStandalone) return;
 
   // 用户已主动关闭
   const dismissed = localStorage.getItem(DISMISS_KEY);
   if (dismissed) {
     const days = (Date.now() - Number(dismissed)) / 86400000;
-    if (days < 14) return;   // 14 天内不再打扰
+    if (days < 14) return;
   }
 
-  isIOS.value =
-    /iPhone|iPad|iPod/.test(navigator.userAgent) &&
-    !(window as any).MSStream;
+  isIOS.value = pwaInstall.isIOS;
 
-  // Android Chrome / Edge：监听 beforeinstallprompt
-  window.addEventListener('beforeinstallprompt', (e: any) => {
-    e.preventDefault();
-    deferredPrompt.value = e;
+  // 监听 deferredPrompt 准备好（Android / 桌面 Chrome / Edge）
+  pwaInstall.onReady(() => {
     showPrompt.value = true;
   });
 
   // iOS Safari：3 秒后展示手动添加引导
   if (isIOS.value) {
-    setTimeout(() => {
-      showPrompt.value = true;
-    }, 3000);
+    setTimeout(() => { showPrompt.value = true; }, 3000);
   }
 });
 
 async function install() {
-  if (deferredPrompt.value) {
-    deferredPrompt.value.prompt();
-    const choice = await deferredPrompt.value.userChoice;
-    if (choice.outcome === 'accepted') {
-      localStorage.setItem(DISMISS_KEY, String(Date.now()));
-    }
-    deferredPrompt.value = null;
-    showPrompt.value = false;
-  } else if (isIOS.value) {
+  const ok = await pwaInstall.tryInstall();
+  if (ok === 'iOS_SHOW_GUIDE') {
     showIOSGuide.value = true;
+  } else if (ok === 'ACCEPTED') {
+    localStorage.setItem(DISMISS_KEY, String(Date.now()));
+    showPrompt.value = false;
+  } else if (ok === 'DISMISSED') {
+    showPrompt.value = false;
   }
 }
 
