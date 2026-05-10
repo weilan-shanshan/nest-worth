@@ -54,3 +54,15 @@ export function fundReturnAbs(a: Asset): number | null {
   if (a.cost) return a.balance - a.cost;
   return null;
 }
+
+/** 持有天数（从 startDate 优先，回落到 createdAt） */
+export function holdingDays(a: Asset): number | null {
+  const start = a.startDate ? new Date(a.startDate) : null;
+  if (start && !isNaN(start.getTime())) {
+    return Math.max(0, Math.floor((Date.now() - start.getTime()) / 86400000));
+  }
+  if (a.createdAt) {
+    return Math.max(0, Math.floor((Date.now() - a.createdAt) / 86400000));
+  }
+  return null;
+}

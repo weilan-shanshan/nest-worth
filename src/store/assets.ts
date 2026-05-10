@@ -213,6 +213,8 @@ export const useAppStore = defineStore('app', () => {
       { name: '易方达蓝筹精选', platform: '蚂蚁财富', category: 'fund',
         balance: 56800.42, currency: 'CNY', cost: 50000,
         totalReturn: 6800.42, annualizedReturn: 13.6,
+        startDate: new Date(today.getFullYear(), today.getMonth() - 6, today.getDate())
+                    .toISOString().slice(0, 10),
         dailyChange: 234.5, dailyChangePct: 0.41,
         tickerSymbol: '005827', tickerType: 'cn-fund',
         createdAt: now, updatedAt: now },
@@ -234,8 +236,10 @@ export const useAppStore = defineStore('app', () => {
         termMonths: 12, interestRate: 3.2, startDate: startDate3mAgo,
         createdAt: now, updatedAt: now },
 
-      { name: '北京回龙观房产', category: 'realestate', balance: 4800000, currency: 'CNY',
-        dailyChange: 0, dailyChangePct: 0, createdAt: now, updatedAt: now }
+      { name: '北京回龙观房产', platform: '北京·回龙观', category: 'realestate',
+        balance: 4800000, currency: 'CNY', cost: 3800000,
+        startDate: '2020-06-15',
+        createdAt: now, updatedAt: now }
     ];
     const ids = await db.assets.bulkAdd(demo as any, { allKeys: true });
     assets.value = demo.map((d, i) => ({ ...d, id: ids[i] as number })) as Asset[];
