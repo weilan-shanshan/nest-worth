@@ -1,15 +1,15 @@
 export type AssetCategory =
   | 'cash'        // 现金/活期
-  | 'deposit'     // 定期存款
+  | 'deposit'     // 定期存款（银行存款）
+  | 'wealth'      // 固收理财（银行理财/券商资管/信托）
   | 'fund'        // 基金
   | 'stock'       // 股票
-  | 'crypto'      // 数字货币
   | 'realestate'  // 房产
   | 'insurance'   // 保险
   | 'receivable'  // 应收/借出
   | 'other';
 
-export type TickerType = 'cn-stock' | 'hk-stock' | 'us-stock' | 'cn-fund' | 'crypto' | 'forex' | 'metal' | 'none';
+export type TickerType = 'cn-stock' | 'hk-stock' | 'us-stock' | 'cn-fund' | 'forex' | 'metal' | 'none';
 
 export interface Asset {
   id?: number;
@@ -23,12 +23,23 @@ export interface Asset {
   dailyChangePct?: number;  // 当日涨跌幅 %
   note?: string;
 
-  // 自动行情同步（基金/股票/加密）
-  tickerSymbol?: string;    // 600519 / AAPL / 008888 / BTC / 0700.HK
+  // 自动行情同步（基金/股票）
+  tickerSymbol?: string;    // 600519 / AAPL / 008888 / 0700.HK
   tickerType?: TickerType;
   shares?: number;          // 持仓数量（股/份）
   lastQuoteAt?: number;     // 上次行情更新时间戳
   lastQuotePrice?: number;  // 上次更新时的单位价格
+
+  // 固收类（存款 / 理财）
+  termMonths?: number;        // 期限（月），如 12 / 36
+  interestRate?: number;      // 年化利率 %，如 3.5
+  startDate?: string;         // 起息日 YYYY-MM-DD
+  maturityDate?: string;      // 到期日 YYYY-MM-DD（可手动填，也可由起息日+期限自动算）
+  maturityValue?: number;     // 到期金额（手动填，否则自动算）
+
+  // 基金类
+  annualizedReturn?: number;  // 年化收益率 %
+  totalReturn?: number;       // 累计收益金额（CNY）
 
   createdAt: number;
   updatedAt: number;

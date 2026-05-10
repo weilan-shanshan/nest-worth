@@ -11,10 +11,18 @@ export interface RecognizedAsset {
   dailyChange?: number;
   dailyChangePct?: number;
   note?: string;
-  // 行情代码（用于自动更新）
+  // 行情代码
   tickerSymbol?: string;
-  tickerType?: 'cn-stock' | 'hk-stock' | 'us-stock' | 'cn-fund' | 'crypto' | 'forex' | 'metal' | 'none';
+  tickerType?: 'cn-stock' | 'hk-stock' | 'us-stock' | 'cn-fund' | 'forex' | 'metal' | 'none';
   shares?: number;
+  // 固收类
+  termMonths?: number;
+  interestRate?: number;
+  startDate?: string;
+  maturityDate?: string;
+  // 基金类
+  annualizedReturn?: number;
+  totalReturn?: number;
 }
 
 export interface RecognizeResult {
@@ -70,22 +78,32 @@ const SYSTEM_PROMPT = `你是一个金融资产识别助手。用户会上传一
 请识别图片中的所有"资产持仓项"，每一项输出一条记录。
 
 字段约束：
-- platform: 截图所在 App / 银行名称（招商银行 / 支付宝 / 富途 / Binance ...）
-- name: 该资产的具体名称（如"招行储蓄卡 1234"、"易方达蓝筹"、"贵州茅台"）
-- category: 必须是以下枚举之一：cash | deposit | fund | stock | crypto | realestate | insurance | receivable | other
+- platform: 截图所在 App / 银行名称（招商银行 / 支付宝 / 富途 / 蚂蚁财富 ...）
+- name: 该资产的具体名称（如"招行三年定期"、"招银理财月月利"、"易方达蓝筹"）
+- category: 必须是以下枚举之一：
+   * cash       - 现金/活期/余额宝/货币基金
+   * deposit    - 银行定期存款（必须是银行的存款，到期还本付息）
+   * wealth     - 固收类理财（招银理财/工银理财/信托/券商资管/银行 R2-R3 理财）
+   * fund       - 基金（公募基金/私募基金/QDII/ETF）
+   * stock      - 股票（A 股/港股/美股个股）
+   * realestate - 房产
+   * insurance  - 保险
+   * receivable - 应收借出
+   * other      - 其他
+   重要：定期存款（deposit）和理财（wealth）是不同类目！银行存款叫 deposit，"XX 理财产品"叫 wealth
 - balance: 当前金额，纯数字，去掉千分位、单位
 - currency: ISO 货币代码（CNY / USD / HKD ...），默认 CNY
 - cost: 持仓成本（可选）
-- dailyChange: 当日涨跌金额（可选，正为涨负为跌）
-- dailyChangePct: 当日涨跌百分比数字（如 +1.23 写 1.23，-0.5 写 -0.5）
-- tickerSymbol: 行情代码（可选，能识别就给）：
-   * A 股：6 位数字（如 600519、000001）
-   * 港股：5 位数字（如 00700）
-   * 美股：英文字母（如 AAPL、TSLA、QQQ）
-   * 国内基金：6 位数字（如 008888、110011）
-   * 加密：BTC / ETH / SOL 等
-- tickerType: 与 tickerSymbol 对应：cn-stock | hk-stock | us-stock | cn-fund | crypto | forex | metal
+- dailyChange / dailyChangePct: 当日涨跌（可选）
+- tickerSymbol: 行情代码（基金/股票适用）：A 股 6 位 / 港股 5 位 / 美股字母 / 基金 6 位
+- tickerType: 与 tickerSymbol 对应：cn-stock | hk-stock | us-stock | cn-fund
 - shares: 持仓数量（股 / 份）
+- termMonths: 期限（月），定期存款/理财用，如 12 / 36
+- interestRate: 年化利率 %（数字），如 3.5（不带 % 符号）
+- startDate: 起息日，格式 YYYY-MM-DD
+- maturityDate: 到期日，格式 YYYY-MM-DD
+- annualizedReturn: 基金年化收益率 %
+- totalReturn: 基金累计收益金额（CNY）
 - note: 任何额外说明（可选）
 
 严格只输出 JSON，结构：{"items": [<RecognizedAsset>, ...]}。
@@ -256,10 +274,10 @@ function safeParseJson(text: string): any {
 }
 
 const VALID_CATS: AssetCategory[] = [
-  'cash', 'deposit', 'fund', 'stock', 'crypto', 'realestate', 'insurance', 'receivable', 'other'
+  'cash', 'deposit', 'wealth', 'fund', 'stock', 'realestate', 'insurance', 'receivable', 'other'
 ];
 
-const VALID_TICKER_TYPES = ['cn-stock', 'hk-stock', 'us-stock', 'cn-fund', 'crypto', 'forex', 'metal'];
+const VALID_TICKER_TYPES = ['cn-stock', 'hk-stock', 'us-stock', 'cn-fund', 'forex', 'metal'];
 
 function normalize(raw: any): RecognizedAsset | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -282,7 +300,13 @@ function normalize(raw: any): RecognizedAsset | null {
     note: typeof raw.note === 'string' ? raw.note : undefined,
     tickerSymbol: ticker || undefined,
     tickerType: tickerType as any,
-    shares: numOrUndef(raw.shares)
+    shares: numOrUndef(raw.shares),
+    termMonths: numOrUndef(raw.termMonths),
+    interestRate: numOrUndef(raw.interestRate),
+    startDate: typeof raw.startDate === 'string' ? raw.startDate : undefined,
+    maturityDate: typeof raw.maturityDate === 'string' ? raw.maturityDate : undefined,
+    annualizedReturn: numOrUndef(raw.annualizedReturn),
+    totalReturn: numOrUndef(raw.totalReturn)
   };
 }
 

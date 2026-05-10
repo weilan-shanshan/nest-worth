@@ -332,7 +332,7 @@ function toast(msg: string) {
         <span class="ml-auto inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-700"
               :class="proxyOn ? 'bg-pos/15 text-pos' : 'bg-orange/15 text-orange'">
           <span :class="proxyOn ? 'i-ph-check-circle-duotone' : 'i-ph-warning-circle-duotone'" />
-          {{ proxyOn ? 'Worker 已配' : '仅加密货币' }}
+          {{ proxyOn ? 'Worker 已配' : '未配 Worker' }}
         </span>
       </div>
       <p class="text-[11px] text-ink-muted leading-relaxed mb-3">
@@ -348,7 +348,7 @@ function toast(msg: string) {
       </button>
 
       <div v-if="!proxyOn" class="bg-orange/8 rounded-icon p-2.5 text-[11px] leading-relaxed">
-        <div class="font-700 text-orange mb-1">⚙️ 想拉 A 股 / 港股 / 美股 / 国内基金价</div>
+        <div class="font-700 text-orange mb-1">⚙️ 想自动拉 A 股 / 港股 / 美股 / 国内基金价</div>
         <div class="text-ink-muted">
           需要部署一个 Cloudflare Worker 代理（绕过 CORS）。
           <b class="text-ink">5 分钟搞定，免费</b>：

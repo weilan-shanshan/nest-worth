@@ -2,9 +2,8 @@
  * 实时市场数据抓取（仅免费 + CORS 友好的接口）。
  *
  * 已接入：
- *   - 加密货币：CoinGecko (https://api.coingecko.com/api/v3)
- *   - 法币汇率：Frankfurter ECB (https://api.frankfurter.app)
- *   - 黄金：metals.live free
+ *   - 法币汇率：open.er-api.com / Frankfurter ECB（多源 fallback）
+ *   - 黄金：CoinGecko PAXG 锚定金币
  *
  * 待接入（需 Cloudflare Worker 代理）：
  *   - A 股 / 美股 / 港股 / 指数（腾讯/新浪不给 CORS）
@@ -17,10 +16,11 @@ export interface MarketSnapshot {
   fetchedAtIso: string;
   fxRates: Record<string, number>;          // 1 USD = X CNY/HKD/EUR/JPY ...
   fxBase: string;                            // 'USD'
-  crypto: { symbol: string; price: number; change24h: number }[];
   metals: { symbol: string; price: number }[];
   notes: string[];                           // 抓取过程中的提示/失败信息
   sources: string[];                         // 实际成功的数据源
+  // 兼容字段（已废弃，保留以免破坏 cache 反序列化）
+  crypto?: any[];
 }
 
 const CACHE_KEY = 'market-snapshot';
@@ -45,16 +45,14 @@ export async function fetchMarketSnapshot(forceRefresh = false): Promise<MarketS
     fetchedAtIso: new Date().toISOString(),
     fxRates: {},
     fxBase: 'USD',
-    crypto: [],
     metals: [],
     notes: [],
     sources: []
   };
 
-  // 并行抓取，任一失败不影响其他
+  // 并行抓取，任一失败不影响其他（去掉了加密货币）
   const tasks = [
     fetchFx(snapshot),
-    fetchCrypto(snapshot),
     fetchMetals(snapshot)
   ];
   await Promise.allSettled(tasks);
@@ -107,28 +105,7 @@ async function fetchFx(snap: MarketSnapshot) {
   snap.notes.push(`汇率：所有数据源都不可达（可能网络受限）`);
 }
 
-/* ---------- 加密货币 (CoinGecko) ---------- */
-async function fetchCrypto(snap: MarketSnapshot) {
-  try {
-    const url = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana&vs_currencies=usd&include_24hr_change=true';
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const map: Record<string, string> = { bitcoin: 'BTC', ethereum: 'ETH', tether: 'USDT', solana: 'SOL' };
-    for (const [k, v] of Object.entries(data) as any) {
-      snap.crypto.push({
-        symbol: map[k] || k.toUpperCase(),
-        price: v.usd,
-        change24h: v.usd_24h_change || 0
-      });
-    }
-    if (snap.crypto.length) snap.sources.push('CoinGecko');
-  } catch (e: any) {
-    snap.notes.push(`加密货币：${e.message || '请求失败'}`);
-  }
-}
-
-/* ---------- 贵金属 (CoinGecko 也有 PAXG/XAUT 锚定黄金的 token，可作代理) ---------- */
+/* ---------- 贵金属 (CoinGecko PAXG 黄金代币锚价) ---------- */
 async function fetchMetals(snap: MarketSnapshot) {
   // CoinGecko 提供两种黄金代币：PAXG / XAUT，价格约等于实物金每盎司价格
   try {
@@ -184,11 +161,6 @@ export function formatSnapshotForPrompt(snap: MarketSnapshot): string {
       .map(([c, r]) => `1 USD = ${r.toFixed(4)} ${c}`)
       .join('，');
     lines.push(`汇率：${fx}`);
-  }
-
-  if (snap.crypto.length) {
-    const c = snap.crypto.map(x => `${x.symbol} $${x.price.toLocaleString()} (24h ${x.change24h >= 0 ? '+' : ''}${x.change24h.toFixed(2)}%)`).join('；');
-    lines.push(`加密货币：${c}`);
   }
 
   if (snap.metals.length) {

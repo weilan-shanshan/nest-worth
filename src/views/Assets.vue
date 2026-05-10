@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useAppStore } from '../store/assets';
-import AssetIcon from '../components/AssetIcon.vue';
 import AssetEditor from '../components/AssetEditor.vue';
 import ScreenshotImporter from '../components/ScreenshotImporter.vue';
 import AssetBatchEditor from '../components/AssetBatchEditor.vue';
+import AssetRow from '../components/AssetRow.vue';
 import { CATEGORIES, CATEGORY_MAP } from '../lib/asset-meta';
 import { formatMoney, formatPct, formatCompact } from '../lib/format';
 import type { Asset, AssetCategory } from '../types';
@@ -29,6 +29,38 @@ const filtered = computed(() => {
 });
 
 const filteredTotal = computed(() => filtered.value.reduce((s, a) => s + a.balance, 0));
+
+// 长列表自动按类型分组（filter=all 时启用，避免单分类下重复 chip）
+const grouped = computed(() => {
+  if (filter.value !== 'all') return null;
+  const map = new Map<AssetCategory, Asset[]>();
+  for (const a of filtered.value) {
+    const list = map.get(a.category) || [];
+    list.push(a);
+    map.set(a.category, list);
+  }
+  return CATEGORIES
+    .filter(c => map.has(c.key))
+    .map(c => ({
+      key: c.key,
+      label: c.label,
+      color: c.color,
+      items: map.get(c.key)!,
+      total: map.get(c.key)!.reduce((s, x) => s + x.balance, 0)
+    }))
+    .sort((a, b) => b.total - a.total);
+});
+
+// 折叠状态（默认展开），按 group key 存
+const collapsed = ref<Record<string, boolean>>({});
+function toggleGroup(key: string) {
+  collapsed.value = { ...collapsed.value, [key]: !collapsed.value[key] };
+}
+
+// 大列表（>= 6）默认折叠，给用户一眼看到的能力
+function defaultCollapsed(count: number) {
+  return count >= 6;
+}
 
 function openEditor(a: Asset | null = null) {
   editing.value = a;
@@ -112,42 +144,44 @@ function mask(text: string) {
       </button>
     </div>
 
-    <!-- 资产列表（突出名称 + 金额 + 类型 chip） -->
-    <div class="flex flex-col gap-2">
-      <div v-for="a in filtered" :key="a.id"
-           class="card-base tap !p-3.5"
-           @click="openEditor(a)">
-        <div class="flex items-start gap-3">
-          <AssetIcon :category="a.category" :size="44" />
-          <div class="flex-1 min-w-0">
-            <div class="font-700 text-[15px] truncate leading-tight">{{ a.name }}</div>
-            <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
-              <span class="inline-flex items-center px-1.5 h-4.5 rounded text-[10px] font-600"
-                    :style="{ background: CATEGORY_MAP[a.category].color + '22', color: CATEGORY_MAP[a.category].color }">
-                {{ CATEGORY_MAP[a.category].label }}
-              </span>
-              <span v-if="a.platform" class="text-[10px] text-ink-muted truncate">{{ a.platform }}</span>
-            </div>
+    <!-- 资产列表 -->
+    <!-- 全部视图：按类型自动分组（同类多项可折叠） -->
+    <div v-if="grouped" class="flex flex-col gap-3">
+      <div v-for="g in grouped" :key="g.key" class="flex flex-col gap-2">
+        <button class="tap flex items-center gap-2 px-1 -mx-1"
+                @click="toggleGroup(g.key)">
+          <span class="px-1.5 h-4.5 inline-flex items-center rounded text-[10px] font-700"
+                :style="{ background: g.color + '20', color: g.color }">
+            {{ g.label }}
+          </span>
+          <span class="text-[11px] text-ink-muted">
+            {{ g.items.length }} 项 · ¥{{ mask(formatCompact(g.total)) }}
+          </span>
+          <span class="ml-auto text-ink-muted text-xs i-ph-caret-down-bold transition-transform"
+                :class="(collapsed[g.key] ?? defaultCollapsed(g.items.length)) ? '-rotate-90' : ''" />
+        </button>
+        <Transition name="fade">
+          <div v-if="!(collapsed[g.key] ?? defaultCollapsed(g.items.length))"
+               class="flex flex-col gap-1.5">
+            <AssetRow v-for="a in g.items" :key="a.id"
+                      :asset="a"
+                      :privacy-mode="store.settings.privacyMode"
+                      @click="openEditor(a)" />
           </div>
-          <div class="text-right shrink-0">
-            <div class="font-brand font-600 text-lg leading-none">
-              ¥{{ mask(formatCompact(a.balance)) }}
-            </div>
-            <div v-if="a.dailyChangePct !== undefined && a.dailyChangePct !== 0"
-                 class="mt-1 text-[11px] font-600"
-                 :class="a.dailyChangePct >= 0 ? 'text-pos' : 'text-neg'">
-              {{ formatPct(a.dailyChangePct) }}
-            </div>
-            <div v-else-if="a.cost" class="mt-1 text-[10px] text-ink-muted">
-              成本 ¥{{ formatCompact(a.cost) }}
-            </div>
-          </div>
-        </div>
+        </Transition>
       </div>
+    </div>
 
-      <div v-if="filtered.length === 0" class="text-center text-ink-muted text-sm py-12">
-        当前筛选下无资产
-      </div>
+    <!-- 单类型视图：纯列表 -->
+    <div v-else class="flex flex-col gap-1.5">
+      <AssetRow v-for="a in filtered" :key="a.id"
+                :asset="a"
+                :privacy-mode="store.settings.privacyMode"
+                @click="openEditor(a)" />
+    </div>
+
+    <div v-if="filtered.length === 0" class="text-center text-ink-muted text-sm py-12">
+      当前筛选下无资产
     </div>
   </div>
 

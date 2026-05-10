@@ -43,7 +43,7 @@ const values = [
     tag: '实时锚点',
     title: 'AI 给的"年化 5-8%"不是瞎编',
     before: '某些 AI 顾问的年化预期是从训练数据里"拍脑袋"出来的。',
-    after: 'Nestworth 实时拉 USD/CNY 汇率、BTC/ETH 行情、黄金价格，把这些"市场锚点"喂给模型再分析。\n每张建议卡底部明示：基于哪些数据、几点几分抓取、哪个模型生成。',
+    after: 'Nestworth 实时拉 USD/CNY/HKD/EUR 汇率、黄金价格，把这些"市场锚点"喂给模型再分析。\n每张建议卡底部明示：基于哪些数据、几点几分抓取、哪个模型生成。',
   },
   {
     icon: 'i-ph-lock-key-duotone',

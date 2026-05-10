@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, watch } from 'vue';
+import { reactive, watch, computed } from 'vue';
 import type { Asset, AssetCategory } from '../types';
 import { CATEGORIES } from '../lib/asset-meta';
 import Modal from './Modal.vue';
@@ -22,9 +22,18 @@ const form = reactive({
   dailyChange: undefined as number | undefined,
   dailyChangePct: undefined as number | undefined,
   note: '',
+  // 行情
   tickerSymbol: '',
-  tickerType: 'none' as 'cn-stock' | 'hk-stock' | 'us-stock' | 'cn-fund' | 'crypto' | 'none',
-  shares: undefined as number | undefined
+  tickerType: 'none' as 'cn-stock' | 'hk-stock' | 'us-stock' | 'cn-fund' | 'none',
+  shares: undefined as number | undefined,
+  // 固收
+  termMonths: undefined as number | undefined,
+  interestRate: undefined as number | undefined,
+  startDate: '',
+  maturityDate: '',
+  // 基金
+  annualizedReturn: undefined as number | undefined,
+  totalReturn: undefined as number | undefined
 });
 
 watch(() => props.open, (o) => {
@@ -34,11 +43,17 @@ watch(() => props.open, (o) => {
       balance: 0, currency: 'CNY',
       cost: undefined, dailyChange: undefined, dailyChangePct: undefined,
       note: '',
-      tickerSymbol: '', tickerType: 'none', shares: undefined
+      tickerSymbol: '', tickerType: 'none', shares: undefined,
+      termMonths: undefined, interestRate: undefined, startDate: '', maturityDate: '',
+      annualizedReturn: undefined, totalReturn: undefined
     });
     if (props.initial) Object.assign(form, props.initial);
   }
 }, { immediate: true });
+
+const isFixedIncome = computed(() => form.category === 'deposit' || form.category === 'wealth');
+const isFund = computed(() => form.category === 'fund');
+const isMarket = computed(() => form.category === 'fund' || form.category === 'stock');
 
 function save() {
   if (!form.name.trim()) return;
@@ -54,7 +69,15 @@ function save() {
     note: form.note?.trim() || undefined,
     tickerSymbol: form.tickerSymbol?.trim().toUpperCase() || undefined,
     tickerType: form.tickerType === 'none' ? undefined : form.tickerType as any,
-    shares: form.shares
+    shares: form.shares,
+    // 固收类
+    termMonths: isFixedIncome.value ? form.termMonths : undefined,
+    interestRate: isFixedIncome.value ? form.interestRate : undefined,
+    startDate: isFixedIncome.value ? (form.startDate || undefined) : undefined,
+    maturityDate: isFixedIncome.value ? (form.maturityDate || undefined) : undefined,
+    // 基金类
+    annualizedReturn: isFund.value ? form.annualizedReturn : undefined,
+    totalReturn: isFund.value ? form.totalReturn : undefined
   });
 }
 </script>
@@ -105,15 +128,62 @@ function save() {
         <input v-model.number="form.cost" type="number" step="0.01" class="field-input" />
       </Field>
 
-      <!-- 行情自动更新（基金/股票/加密） -->
-      <div class="bg-bg/60 rounded-icon p-3 flex flex-col gap-3">
+      <!-- 固收类（存款/理财）字段组 -->
+      <div v-if="isFixedIncome" class="bg-bg/60 rounded-icon p-3 flex flex-col gap-3">
+        <div class="flex items-center gap-1.5 text-[11px] text-ink-muted font-700">
+          <span class="i-ph-bank-duotone text-brand text-sm" />
+          {{ form.category === 'deposit' ? '存款细节' : '理财细节' }}
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <Field label="期限（月）">
+            <input v-model.number="form.termMonths" type="number" min="1" max="600"
+                   placeholder="12 / 36 / 60" class="field-input" />
+          </Field>
+          <Field label="年化利率 %">
+            <input v-model.number="form.interestRate" type="number" step="0.01"
+                   placeholder="3.5" class="field-input" />
+          </Field>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <Field label="起息日">
+            <input v-model="form.startDate" type="date" class="field-input" />
+          </Field>
+          <Field label="到期日 (可选 · 自动算)">
+            <input v-model="form.maturityDate" type="date" class="field-input" />
+          </Field>
+        </div>
+        <p class="text-[10px] text-ink-muted leading-relaxed">
+          填了起息日 + 期限会自动算到期日；填了利率会自动算到期收益。
+        </p>
+      </div>
+
+      <!-- 基金字段组 -->
+      <div v-if="isFund" class="bg-bg/60 rounded-icon p-3 flex flex-col gap-3">
+        <div class="flex items-center gap-1.5 text-[11px] text-ink-muted font-700">
+          <span class="i-ph-chart-pie-slice-duotone text-brand text-sm" />
+          基金细节
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <Field label="累计收益 ¥">
+            <input v-model.number="form.totalReturn" type="number" step="0.01"
+                   placeholder="3000" class="field-input" />
+          </Field>
+          <Field label="年化收益率 %">
+            <input v-model.number="form.annualizedReturn" type="number" step="0.01"
+                   placeholder="8.2" class="field-input" />
+          </Field>
+        </div>
+      </div>
+
+      <!-- 行情自动更新（基金/股票） -->
+      <div v-if="isMarket" class="bg-bg/60 rounded-icon p-3 flex flex-col gap-3">
         <div class="flex items-center gap-1.5 text-[11px] text-ink-muted font-700">
           <span class="i-ph-currency-circle-dollar-duotone text-brand text-sm" />
           自动行情同步（可选 · 留空就手动维护）
         </div>
         <div class="grid grid-cols-2 gap-2">
           <Field label="行情代码">
-            <input v-model="form.tickerSymbol" placeholder="600519 / AAPL / 008888 / BTC"
+            <input v-model="form.tickerSymbol" placeholder="600519 / AAPL / 008888"
                    class="field-input uppercase font-mono" maxlength="20" />
           </Field>
           <Field label="市场">
@@ -123,7 +193,6 @@ function save() {
               <option value="hk-stock">港股</option>
               <option value="us-stock">美股</option>
               <option value="cn-fund">国内基金</option>
-              <option value="crypto">加密货币</option>
             </select>
           </Field>
         </div>
@@ -132,8 +201,8 @@ function save() {
                  placeholder="100" class="field-input" />
         </Field>
         <p class="text-[10px] text-ink-muted leading-relaxed">
-          配置后系统每天自动拉最新价 × 持仓数量 = 余额。<br/>
-          A 股 / 港股 / 美股 / 国内基金需部署 Cloudflare Worker 代理（见 README）。加密货币直连 CoinGecko 免配。
+          配置后系统每天自动拉最新价 × 持仓数量 = 余额。
+          A 股 / 港股 / 美股 / 国内基金需部署 Cloudflare Worker 代理。
         </p>
       </div>
 

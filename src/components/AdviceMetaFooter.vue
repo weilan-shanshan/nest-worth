@@ -32,9 +32,7 @@ const liveData = computed(() => {
   if (!m) return [];
   const arr: string[] = [];
   if (m.fxRates && m.fxRates.CNY) arr.push(`USD/CNY ${m.fxRates.CNY.toFixed(3)}`);
-  for (const c of m.crypto.slice(0, 2)) {
-    arr.push(`${c.symbol} $${c.price < 10 ? c.price.toFixed(3) : c.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}`);
-  }
+  if (m.fxRates && m.fxRates.HKD) arr.push(`USD/HKD ${m.fxRates.HKD.toFixed(3)}`);
   for (const x of m.metals.slice(0, 1)) {
     arr.push(`${x.symbol} $${x.price.toFixed(0)}/oz`);
   }
