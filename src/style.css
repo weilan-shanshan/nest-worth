@@ -1,0 +1,58 @@
+:root {
+  font-family: Nunito, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color-scheme: light;
+}
+
+html, body, #app {
+  height: 100%;
+  margin: 0;
+  background: #DDEDDE;
+}
+
+body {
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  font-size: 15px;
+  color: #1F2D26;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+}
+
+input, textarea, select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* Hide scrollbars but keep scrollable */
+.scroll-hide::-webkit-scrollbar { display: none; }
+.scroll-hide { scrollbar-width: none; }
+
+/* Subtle press animation */
+.tap { transition: transform 0.12s ease, opacity 0.12s ease; }
+.tap:active { transform: scale(0.97); opacity: 0.85; }
+
+/* Modal animation */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.18s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.slide-up-enter-active, .slide-up-leave-active { transition: transform 0.24s cubic-bezier(.2,.8,.2,1), opacity 0.18s; }
+.slide-up-enter-from, .slide-up-leave-to { transform: translateY(40%); opacity: 0; }

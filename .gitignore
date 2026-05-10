@@ -1,0 +1,17 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.local
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.log
+*.tsbuildinfo
+dev-dist
+
+# 本地工具配置（沙箱 / 预览相关）
+.claude/
+package-lock.json

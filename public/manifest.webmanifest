@@ -1,0 +1,13 @@
+{
+  "name": "Nestworth · 巢值",
+  "short_name": "Nestworth",
+  "description": "把分散在各处的资产汇总到一处",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#2E9E60",
+  "background_color": "#EFF6F1",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
