@@ -2,6 +2,7 @@
 import { onMounted } from 'vue';
 import { useAppStore } from './store/assets';
 import AppShell from './components/AppShell.vue';
+import PWAInstallPrompt from './components/PWAInstallPrompt.vue';
 
 const store = useAppStore();
 onMounted(() => store.load());
@@ -14,4 +15,5 @@ onMounted(() => store.load());
   <div v-else class="h-full flex items-center justify-center text-ink-muted text-sm">
     Nestworth 启动中…
   </div>
+  <PWAInstallPrompt />
 </template>
