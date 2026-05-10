@@ -14,7 +14,21 @@ const promptReady = ref(pwaInstall.hasNativePrompt());
 const showIOSGuide = ref(false);
 const showDesktopHint = ref(false);
 const showUnsupported = ref(false);
+const showOpenInBrowser = ref(false);
 const justInstalled = ref(false);
+
+const inAppLabel = computed(() => {
+  switch (pwaInstall.browserKind) {
+    case 'wechat': return '微信';
+    case 'workWechat': return '企业微信';
+    case 'qq': return 'QQ';
+    case 'dingtalk': return '钉钉';
+    case 'feishu': return '飞书';
+    case 'xiaohongshu': return '小红书';
+    case 'douyin': return '抖音';
+    default: return '当前 App';
+  }
+});
 
 onMounted(() => {
   pwaInstall.onReady(() => { promptReady.value = true; });
@@ -27,10 +41,13 @@ const isDesktopChromium = pwaInstall.isDesktopChromium;
 const subtitle = computed(() => {
   if (justInstalled.value) return '已添加到主屏 ✓';
   if (isStandalone) return '正在主屏 App 模式中运行 ✓';
+  if (pwaInstall.isInAppBrowser) {
+    return `${inAppLabel.value}内浏览器无法安装 PWA · 点这里看怎么办`;
+  }
   if (promptReady.value) return '一键添加到主屏，跟原生 App 一样用';
   if (isIOS) return '点这里看 Safari 添加到主屏的步骤';
   if (isDesktopChromium) return '点这里看 Chrome/Edge 安装步骤';
-  return '当前浏览器不支持安装，建议用 Chrome / Edge / Safari';
+  return '当前浏览器不支持，点这里看推荐浏览器';
 });
 
 async function handleClick() {
@@ -39,9 +56,27 @@ async function handleClick() {
     justInstalled.value = true;
   } else if (r === 'IOS_SHOW_GUIDE') {
     showIOSGuide.value = true;
+  } else if (r === 'OPEN_IN_BROWSER') {
+    showOpenInBrowser.value = true;
   } else if (r === 'NO_PROMPT') {
     if (isDesktopChromium) showDesktopHint.value = true;
     else showUnsupported.value = true;
+  }
+}
+
+async function copyUrl() {
+  try {
+    await navigator.clipboard.writeText(location.href);
+    return true;
+  } catch {
+    return false;
+  }
+}
+const urlCopied = ref(false);
+async function handleCopy() {
+  if (await copyUrl()) {
+    urlCopied.value = true;
+    setTimeout(() => urlCopied.value = false, 2000);
   }
 }
 </script>
@@ -157,7 +192,52 @@ async function handleClick() {
       </div>
     </Transition>
 
-    <!-- 不支持 -->
+    <!-- 微信/QQ/钉钉等 App 内嵌 → 在外部浏览器打开 -->
+    <Transition name="fade">
+      <div v-if="showOpenInBrowser"
+           class="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center"
+           @click.self="showOpenInBrowser = false">
+        <Transition name="slide-up" appear>
+          <div class="w-full sm:max-w-[400px] bg-card rounded-t-card sm:rounded-card p-5">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="i-ph-arrow-square-out-duotone text-orange text-xl" />
+              <h3 class="font-700 text-base flex-1">{{ inAppLabel }} 里装不了 PWA</h3>
+              <button class="tap text-ink-muted i-ph-x-bold text-lg" @click="showOpenInBrowser = false" />
+            </div>
+            <p class="text-[12px] text-ink leading-relaxed mb-3">
+              {{ inAppLabel }}用的是内嵌浏览器，不支持"添加到主屏"。复制链接到外部浏览器打开即可：
+            </p>
+            <div class="bg-bg/60 rounded-icon p-3 text-[13px] leading-relaxed flex flex-col gap-2">
+              <div class="flex gap-2">
+                <span class="text-brand font-700 shrink-0">①</span>
+                <span>点 <b>右上角 ··· 菜单</b></span>
+              </div>
+              <div class="flex gap-2">
+                <span class="text-brand font-700 shrink-0">②</span>
+                <span>选 <b>「在浏览器打开」</b>（{{ inAppLabel === '微信' ? '微信' : inAppLabel }}所有版本都有）</span>
+              </div>
+              <div class="flex gap-2">
+                <span class="text-brand font-700 shrink-0">③</span>
+                <span>系统会用 Safari (iOS) / 默认浏览器 (Android) 打开</span>
+              </div>
+              <div class="flex gap-2">
+                <span class="text-brand font-700 shrink-0">④</span>
+                <span>再回这里点「装到主屏」</span>
+              </div>
+            </div>
+            <button class="tap mt-3 w-full h-11 rounded-icon bg-brand text-white font-700 text-sm flex items-center justify-center gap-1.5"
+                    @click="handleCopy">
+              <span :class="urlCopied ? 'i-ph-check-bold' : 'i-ph-copy-duotone'" class="text-base" />
+              {{ urlCopied ? '已复制 ✓' : '一键复制本页链接' }}
+            </button>
+            <button class="tap mt-2 w-full h-9 rounded-icon text-ink-muted text-[12px] font-600"
+                    @click="showOpenInBrowser = false">知道了</button>
+          </div>
+        </Transition>
+      </div>
+    </Transition>
+
+    <!-- 不支持（桌面 Safari / Firefox / 其他冷门）-->
     <Transition name="fade">
       <div v-if="showUnsupported"
            class="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center"
@@ -166,21 +246,27 @@ async function handleClick() {
           <div class="w-full sm:max-w-[400px] bg-card rounded-t-card sm:rounded-card p-5">
             <div class="flex items-center gap-2 mb-3">
               <span class="i-ph-warning-circle-duotone text-orange text-xl" />
-              <h3 class="font-700 text-base flex-1">当前浏览器不支持</h3>
+              <h3 class="font-700 text-base flex-1">当前浏览器装不了</h3>
               <button class="tap text-ink-muted i-ph-x-bold text-lg" @click="showUnsupported = false" />
             </div>
             <p class="text-[12px] text-ink leading-relaxed mb-3">
-              换个浏览器就好：
+              用下面任一国内/海外浏览器打开本页就能装：
             </p>
-            <div class="bg-bg/60 rounded-icon p-3 text-[12px] leading-relaxed flex flex-col gap-1.5">
-              <div>📱 <b>iPhone / iPad</b>：用 Safari</div>
-              <div>📱 <b>Android</b>：用 Chrome / Edge</div>
-              <div>💻 <b>Mac / Windows</b>：用 Chrome / Edge / Brave</div>
+            <div class="bg-bg/60 rounded-icon p-3 text-[12px] leading-relaxed flex flex-col gap-2">
+              <div>📱 <b>iOS</b>：Safari（系统自带，唯一选择）</div>
+              <div>📱 <b>Android</b>：Edge / 夸克 / 小米浏览器 / 华为浏览器 / Chrome</div>
+              <div>💻 <b>电脑</b>：Edge / Chrome / Brave / 360 极速浏览器（极速模式）</div>
             </div>
-            <p class="text-[11px] text-ink-muted leading-relaxed mt-3">
-              Firefox / iOS 内嵌 WebView（微信/QQ）暂不支持 PWA 安装。
-            </p>
-            <button class="tap mt-3 w-full h-11 rounded-icon bg-brand text-white font-700 text-sm"
+            <div class="bg-orange/10 rounded-icon p-2.5 text-[11px] text-ink leading-relaxed mt-3">
+              <span class="i-ph-info-duotone text-orange align-middle mr-1" />
+              <b class="text-orange">不支持的：</b>桌面 Safari、桌面 Firefox、UC 浏览器旧版、QQ 浏览器手机版、所有 App 内嵌浏览器
+            </div>
+            <button class="tap mt-3 w-full h-11 rounded-icon bg-brand text-white font-700 text-sm flex items-center justify-center gap-1.5"
+                    @click="handleCopy">
+              <span :class="urlCopied ? 'i-ph-check-bold' : 'i-ph-copy-duotone'" class="text-base" />
+              {{ urlCopied ? '已复制 ✓' : '复制链接到其他浏览器打开' }}
+            </button>
+            <button class="tap mt-2 w-full h-9 rounded-icon text-ink-muted text-[12px] font-600"
                     @click="showUnsupported = false">知道了</button>
           </div>
         </Transition>

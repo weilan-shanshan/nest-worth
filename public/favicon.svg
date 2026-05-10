@@ -1,6 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#2E9E60"/>
-  <path d="M16 42c0-9 6-15 16-15s16 6 16 15v6H16v-6z" fill="#fff" opacity=".95"/>
-  <circle cx="32" cy="22" r="6" fill="#fff"/>
-  <path d="M14 48c4-2 10-3 18-3s14 1 18 3" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none" opacity=".7"/>
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Nestworth">
+  <defs>
+    <!-- 深翠绿渐变背景，从左上到右下 -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"  stop-color="#1F5C39"/>
+      <stop offset="100%" stop-color="#0E3A22"/>
+    </linearGradient>
+    <!-- 古典金色渐变 -->
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F2D896"/>
+      <stop offset="50%" stop-color="#D4B26C"/>
+      <stop offset="100%" stop-color="#A88543"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 主体：深翠绿圆角矩形 -->
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+
+  <!-- 双层金线装饰（古典徽章感） -->
+  <rect x="4" y="4" width="56" height="56" rx="10"
+        fill="none" stroke="url(#gold)" stroke-width="0.8" opacity="0.95"/>
+  <rect x="6.5" y="6.5" width="51" height="51" rx="8"
+        fill="none" stroke="url(#gold)" stroke-width="0.4" opacity="0.5"/>
+
+  <!-- 衬线大写 N，老钱核心视觉 -->
+  <text x="32" y="46"
+        font-family="'Playfair Display', 'EB Garamond', 'Times New Roman', Georgia, serif"
+        font-size="42" font-weight="700"
+        fill="url(#gold)" text-anchor="middle" letter-spacing="-1">N</text>
+
+  <!-- 底部小型饰条 -->
+  <rect x="22" y="52" width="20" height="0.7" fill="url(#gold)" opacity="0.7"/>
 </svg>

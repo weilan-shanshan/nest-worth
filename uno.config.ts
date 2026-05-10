@@ -97,6 +97,6 @@ export default defineConfig({
     'i-ph-lock-key-duotone', 'i-ph-users-three-duotone', 'i-ph-x-circle-duotone',
     'i-ph-arrow-square-out-duotone', 'i-ph-paper-plane-tilt-duotone',
     'i-ph-device-mobile-camera-duotone', 'i-ph-share-network-duotone',
-    'i-ph-desktop-duotone'
+    'i-ph-desktop-duotone', 'i-ph-copy-duotone', 'i-ph-check-bold'
   ]
 });
