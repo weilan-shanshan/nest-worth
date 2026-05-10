@@ -89,21 +89,27 @@ async function confirmImport() {
 
   for (const it of selected) {
     if (it.matchedAssetId) {
-      updates.push({
-        id: it.matchedAssetId,
-        patch: {
-          balance: it.recognized.balance,
-          currency: it.recognized.currency || 'CNY',
-          dailyChange: it.recognized.dailyChange,
-          dailyChangePct: it.recognized.dailyChangePct,
-          ...(it.recognized.tickerSymbol ? {
-            tickerSymbol: it.recognized.tickerSymbol,
-            tickerType: it.recognized.tickerType
-          } : {}),
-          ...(it.recognized.shares ? { shares: it.recognized.shares } : {}),
-          ...(it.recognized.cost ? { cost: it.recognized.cost } : {})
-        }
-      });
+      const r = it.recognized;
+      // 透传所有识别到的基础事实字段（不仅金额），供 LLM 派生计算用
+      const patch: any = {
+        balance: r.balance,
+        currency: r.currency || 'CNY',
+        dailyChange: r.dailyChange,
+        dailyChangePct: r.dailyChangePct
+      };
+      if (r.platform) patch.platform = r.platform;
+      if (r.cost !== undefined) patch.cost = r.cost;
+      if (r.tickerSymbol) {
+        patch.tickerSymbol = r.tickerSymbol;
+        patch.tickerType = r.tickerType;
+      }
+      if (r.shares !== undefined) patch.shares = r.shares;
+      if (r.termMonths !== undefined) patch.termMonths = r.termMonths;
+      if (r.interestRate !== undefined) patch.interestRate = r.interestRate;
+      if (r.startDate) patch.startDate = r.startDate;
+      if (r.maturityDate) patch.maturityDate = r.maturityDate;
+      if (r.note) patch.note = r.note;
+      updates.push({ id: it.matchedAssetId, patch });
     } else {
       news.push(it.recognized);
     }
@@ -122,12 +128,19 @@ async function confirmImport() {
       dailyChangePct: n.dailyChangePct,
       note: n.note,
       tickerSymbol: n.tickerSymbol,
-      tickerType: n.tickerType,
-      shares: n.shares
+      tickerType: n.tickerType === 'forex' || n.tickerType === 'metal' ? undefined : n.tickerType,
+      shares: n.shares,
+      termMonths: n.termMonths,
+      interestRate: n.interestRate,
+      startDate: n.startDate,
+      maturityDate: n.maturityDate
     });
   }
   reset();
   emit('close');
+
+  // 入库完毕 → 整库重算派生（不 await，让 modal 立刻关闭；UI 监听 store.deriving 显示进度）
+  store.recomputeDerived().catch(() => { /* 静默 */ });
 }
 
 function reset() {

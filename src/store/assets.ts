@@ -4,6 +4,7 @@ import { db, getOrInitSettings, updateSettings } from '../db';
 import type { Asset, AssetCategory, Goal, Settings, Snapshot } from '../types';
 import { todayStr } from '../lib/format';
 import { refreshAssetQuotes } from '../lib/quotes';
+import { recomputeDerived as runRecompute, isStale, type RecomputeOptions } from '../lib/derive';
 
 export const useAppStore = defineStore('app', () => {
   const assets = ref<Asset[]>([]);
@@ -29,6 +30,9 @@ export const useAppStore = defineStore('app', () => {
       await seedDemo();
     }
     await ensureTodaySnapshot();
+
+    // 后台静默：派生数据陈旧（>12h）则重算整库
+    maybeRecomputeDerived().catch(() => { /* 静默失败 */ });
   }
 
   const totalNetWorth = computed(() =>
@@ -170,6 +174,79 @@ export const useAppStore = defineStore('app', () => {
     refreshQuotes().catch(() => { /* 静默失败 */ });
   }
 
+  /* ========== 派生字段计算 ========== */
+
+  const deriving = ref<{
+    running: boolean;
+    lastAt?: number;
+    lastModelUsed?: string;
+    lastCount?: number;
+    lastLlmFailed?: boolean;
+  }>({ running: false });
+
+  /**
+   * 重新计算派生字段（收益/天数/年化/浮盈等）。
+   * @param assetIds 指定资产 ID（不传 = 整库）
+   * @param opts mode/skipMissing 等；不传 mode 则用 settings.deriveMode
+   */
+  async function recomputeDerived(assetIds?: number[], opts: RecomputeOptions = {}) {
+    if (deriving.value.running) return;
+    if (!hasApiKey.value) {
+      // 没 key：仅做兜底（也走 derive 内部，会返回兜底 derived）
+    }
+    deriving.value.running = true;
+    try {
+      const targets = assetIds
+        ? assets.value.filter(a => a.id && assetIds.includes(a.id))
+        : assets.value;
+      if (targets.length === 0) return;
+
+      const mode = opts.mode ?? settings.value.deriveMode ?? 'batch';
+      const result = await runRecompute(targets, { ...opts, mode });
+
+      const now = Date.now();
+      const updates = targets
+        .filter(a => a.id)
+        .map(a => ({
+          id: a.id!,
+          patch: {
+            derived: result.derived.get(a.id!) || {},
+            missingFields: result.missing.get(a.id!) || [],
+            derivedAt: now
+          } as Partial<Asset>
+        }));
+
+      if (updates.length) {
+        await db.transaction('rw', db.assets, async () => {
+          for (const u of updates) await db.assets.update(u.id, u.patch);
+        });
+        const m = new Map(updates.map(u => [u.id, u.patch]));
+        assets.value = assets.value.map(a => {
+          const p = m.get(a.id!);
+          return p ? { ...a, ...p } : a;
+        });
+      }
+
+      if (!assetIds) {
+        settings.value = await updateSettings({ derivedAllAt: now });
+      }
+
+      deriving.value.lastAt = now;
+      deriving.value.lastModelUsed = result.modelUsed;
+      deriving.value.lastCount = targets.length;
+      deriving.value.lastLlmFailed = result.llmFailed;
+    } finally {
+      deriving.value.running = false;
+    }
+  }
+
+  /** load 后自动检查：陈旧（>12h）则后台重算整库 */
+  async function maybeRecomputeDerived() {
+    if (!isStale(settings.value.derivedAllAt)) return;
+    // 没 key 时仍跑一次只用兜底公式，保证 UI 上"剩余天数 / 浮盈"等基本可见
+    await recomputeDerived(undefined, hasApiKey.value ? {} : { skipLlm: true });
+  }
+
   async function exportAll() {
     const data = {
       version: 1,
@@ -210,9 +287,9 @@ export const useAppStore = defineStore('app', () => {
       { name: '余额宝', platform: '支付宝', category: 'cash', balance: 12300.18, currency: 'CNY',
         dailyChange: 1.23, dailyChangePct: 0.01, createdAt: now, updatedAt: now },
 
+      // 基金：仅留基础事实（成本、买入日、代码、份额）；累计收益/年化由 LLM 算
       { name: '易方达蓝筹精选', platform: '蚂蚁财富', category: 'fund',
         balance: 56800.42, currency: 'CNY', cost: 50000,
-        totalReturn: 6800.42, annualizedReturn: 13.6,
         startDate: new Date(today.getFullYear(), today.getMonth() - 6, today.getDate())
                     .toISOString().slice(0, 10),
         dailyChange: 234.5, dailyChangePct: 0.41,
@@ -273,7 +350,8 @@ export const useAppStore = defineStore('app', () => {
     load, addAsset, updateAsset, deleteAsset, bulkUpdate,
     addGoal, updateGoal, deleteGoal,
     setApiKey, setPrivacy, refreshSettings, exportAll, importAll,
-    refreshQuotes, maybeRefreshQuotes, quotesRefreshing, quotesLastResult
+    refreshQuotes, maybeRefreshQuotes, quotesRefreshing, quotesLastResult,
+    recomputeDerived, deriving
   };
 });
 

@@ -5,6 +5,7 @@ import AssetEditor from '../components/AssetEditor.vue';
 import ScreenshotImporter from '../components/ScreenshotImporter.vue';
 import AssetBatchEditor from '../components/AssetBatchEditor.vue';
 import AssetRow from '../components/AssetRow.vue';
+import SupplementInfoModal from '../components/SupplementInfoModal.vue';
 import { CATEGORIES, CATEGORY_MAP } from '../lib/asset-meta';
 import { formatMoney, formatPct, formatCompact } from '../lib/format';
 import type { Asset, AssetCategory } from '../types';
@@ -15,6 +16,8 @@ const editorOpen = ref(false);
 const editing = ref<Asset | null>(null);
 const importerOpen = ref(false);
 const batchOpen = ref(false);
+const supplementOpen = ref(false);
+const supplementing = ref<Asset | null>(null);
 
 const visibleCats = computed(() => {
   const used = new Set(store.assets.map(a => a.category));
@@ -105,12 +108,17 @@ function openEditor(a: Asset | null = null) {
 }
 
 async function onSave(data: any) {
+  let id: number | undefined;
   if (editing.value?.id) {
     await store.updateAsset(editing.value.id, data);
+    id = editing.value.id;
   } else {
-    await store.addAsset(data);
+    const a = await store.addAsset(data);
+    id = a.id;
   }
   editorOpen.value = false;
+  // 编辑保存后立刻重算单条派生
+  if (id) store.recomputeDerived([id]).catch(() => { /* 静默 */ });
 }
 
 async function onDelete() {
@@ -125,6 +133,23 @@ async function onImport(items: any[]) {
   importerOpen.value = false;
 }
 
+function openSupplement(a: Asset) {
+  supplementing.value = a;
+  supplementOpen.value = true;
+}
+
+async function onSupplementSave(patch: Partial<Asset>) {
+  const id = supplementing.value?.id;
+  supplementOpen.value = false;
+  if (!id) return;
+  await store.updateAsset(id, patch);
+  store.recomputeDerived([id]).catch(() => { /* 静默 */ });
+}
+
+async function manualRecompute() {
+  await store.recomputeDerived();
+}
+
 function mask(text: string) {
   return store.settings.privacyMode ? text.replace(/[\d.,]/g, '•') : text;
 }
@@ -135,6 +160,13 @@ function mask(text: string) {
     <header class="flex items-center justify-between">
       <h1 class="font-brand font-600 text-2xl">资产</h1>
       <div class="flex gap-2">
+        <button v-if="store.assets.length > 0"
+                class="tap w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center text-brand disabled:opacity-50"
+                :disabled="store.deriving.running"
+                :title="store.deriving.running ? '正在重算派生数据…' : '重新计算收益/天数/年化'"
+                @click="manualRecompute">
+          <span :class="store.deriving.running ? 'i-ph-spinner-gap-bold animate-spin' : 'i-ph-arrows-clockwise-bold'" class="text-lg" />
+        </button>
         <button v-if="store.assets.length > 0"
                 class="tap h-10 px-3 rounded-full bg-card border border-border flex items-center gap-1.5 text-brand text-[12px] font-700"
                 @click="batchOpen = true">
@@ -225,7 +257,8 @@ function mask(text: string) {
             <AssetRow v-for="a in g.items" :key="a.id"
                       :asset="a"
                       :privacy-mode="store.settings.privacyMode"
-                      @click="openEditor(a)" />
+                      @click="openEditor(a)"
+                      @supplement="openSupplement(a)" />
           </div>
         </section>
       </div>
@@ -236,7 +269,8 @@ function mask(text: string) {
       <AssetRow v-for="a in filtered" :key="a.id"
                 :asset="a"
                 :privacy-mode="store.settings.privacyMode"
-                @click="openEditor(a)" />
+                @click="openEditor(a)"
+                @supplement="openSupplement(a)" />
     </div>
 
     <div v-if="filtered.length === 0" class="text-center text-ink-muted text-sm py-12">
@@ -247,4 +281,6 @@ function mask(text: string) {
   <AssetEditor :open="editorOpen" :initial="editing" @close="editorOpen = false" @save="onSave" @delete="onDelete" />
   <ScreenshotImporter :open="importerOpen" @close="importerOpen = false" @import="onImport" />
   <AssetBatchEditor :open="batchOpen" @close="batchOpen = false" />
+  <SupplementInfoModal :open="supplementOpen" :asset="supplementing"
+                       @close="supplementOpen = false" @save="onSupplementSave" />
 </template>

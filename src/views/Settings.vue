@@ -2,11 +2,12 @@
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAppStore } from '../store/assets';
-import { db, updateAnalystConfig } from '../db';
+import { db, updateAnalystConfig, updateSettings } from '../db';
 import { MODEL_CHAIN, ANALYST_CHAIN, resetExhaustedModels, setPreferredModel } from '../lib/recognize';
 import { clearAdviceCache } from '../lib/advisor';
 import InstallEntryCard from '../components/InstallEntryCard.vue';
 import { isQuoteProxyConfigured } from '../lib/quotes';
+import type { DeriveMode } from '../types';
 
 const router = useRouter();
 
@@ -158,6 +159,21 @@ function formatRel(ts?: number) {
   if (diff < 3600_000) return `${Math.round(diff / 60_000)} 分钟前`;
   if (diff < 86400_000) return `${Math.round(diff / 3600_000)} 小时前`;
   return `${Math.round(diff / 86400_000)} 天前`;
+}
+
+/* ============== 派生计算模式 ============== */
+
+const deriveMode = computed<DeriveMode>(() => store.settings.deriveMode || 'batch');
+
+async function setDeriveMode(mode: DeriveMode) {
+  await updateSettings({ deriveMode: mode });
+  await store.refreshSettings();
+  toast(mode === 'batch' ? '已切换：整库一次 LLM' : '已切换：每条并发 LLM');
+}
+
+async function manualRecomputeDerived() {
+  await store.recomputeDerived();
+  toast('派生数据已重算');
 }
 
 function toast(msg: string) {
@@ -322,6 +338,58 @@ function toast(msg: string) {
               @click="resetAnalystConfig">
         恢复默认顺序和启用
       </button>
+    </section>
+
+    <!-- 派生数据计算 -->
+    <section class="card-base">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="i-ph-calculator-duotone text-brand text-lg" />
+        <h3 class="font-700 text-[15px]">派生数据计算</h3>
+        <span class="ml-auto text-[10px] text-ink-muted">
+          上次 {{ formatRel(store.settings.derivedAllAt) }}
+        </span>
+      </div>
+      <p class="text-[11px] text-ink-muted leading-relaxed mb-3">
+        收益、距到期天数、年化、浮盈等<b class="text-brand">全部由 AI 自动计算</b>，绝不让你自己算。
+        每次打开 app 若超过 12 小时未算会自动重算；也可手动触发。
+      </p>
+
+      <div class="mb-3 p-2.5 rounded-icon bg-brand/8">
+        <div class="text-[11px] font-700 mb-1.5">计算模式</div>
+        <div class="flex gap-1.5">
+          <button
+            class="tap flex-1 h-12 rounded-icon text-xs font-700 border transition-all"
+            :class="deriveMode === 'batch'
+              ? 'bg-brand text-white border-brand'
+              : 'bg-card border-border text-ink-muted'"
+            @click="setDeriveMode('batch')"
+          >
+            <div>整库一次</div>
+            <div class="text-[9px] mt-0.5 font-400 opacity-80">省 token / 默认</div>
+          </button>
+          <button
+            class="tap flex-1 h-12 rounded-icon text-xs font-700 border transition-all"
+            :class="deriveMode === 'parallel'
+              ? 'bg-brand text-white border-brand'
+              : 'bg-card border-border text-ink-muted'"
+            @click="setDeriveMode('parallel')"
+          >
+            <div>每条并发</div>
+            <div class="text-[9px] mt-0.5 font-400 opacity-80">更稳 / 多 token</div>
+          </button>
+        </div>
+      </div>
+
+      <button class="tap w-full h-10 rounded-icon bg-brand text-white text-[13px] font-700 flex items-center justify-center gap-1.5 disabled:opacity-50"
+              :disabled="store.deriving.running || !store.hasApiKey"
+              @click="manualRecomputeDerived">
+        <span :class="store.deriving.running ? 'i-ph-spinner-gap-bold animate-spin' : 'i-ph-arrows-clockwise-bold'" class="text-base" />
+        {{ store.deriving.running ? '正在重算…' : '立即重算所有派生数据' }}
+      </button>
+      <div v-if="store.deriving.lastModelUsed" class="text-[10px] text-ink-muted mt-1.5 text-center">
+        模型：{{ store.deriving.lastModelUsed }}
+        <span v-if="store.deriving.lastLlmFailed" class="text-orange ml-1">（LLM 失败已用兜底公式）</span>
+      </div>
     </section>
 
     <!-- 自动行情同步 -->

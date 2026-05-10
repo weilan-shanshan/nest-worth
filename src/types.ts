@@ -11,6 +11,23 @@ export type AssetCategory =
 
 export type TickerType = 'cn-stock' | 'hk-stock' | 'us-stock' | 'cn-fund' | 'forex' | 'metal' | 'none';
 
+/**
+ * LLM/系统算出的派生字段（不允许用户手填，只通过 derive.ts 写入）。
+ * 渲染层只读这里，AssetRow 不再调 asset-calc.ts 的派生函数（仅作为兜底）。
+ */
+export interface AssetDerived {
+  daysToMaturity?: number;     // 距到期天数
+  maturityValue?: number;      // 到期金额
+  maturityProfit?: number;     // 到期收益
+  fundReturnAbs?: number;      // 基金累计收益金额
+  fundReturnPct?: number;      // 基金累计收益率 %
+  annualized?: number;         // 年化收益率 %（基金/固收）
+  holdingDays?: number;        // 持有天数
+  pnlAbs?: number;             // 通用浮盈金额（房产/股票）
+  pnlPct?: number;             // 通用浮盈率
+  note?: string;               // LLM 给出的一句话点评（可选）
+}
+
 export interface Asset {
   id?: number;
   name: string;             // 招商银行储蓄卡
@@ -30,16 +47,25 @@ export interface Asset {
   lastQuoteAt?: number;     // 上次行情更新时间戳
   lastQuotePrice?: number;  // 上次更新时的单位价格
 
-  // 固收类（存款 / 理财）
+  // 固收类（存款 / 理财）—— 基础事实字段，可由用户填或截图识别
   termMonths?: number;        // 期限（月），如 12 / 36
   interestRate?: number;      // 年化利率 %，如 3.5
-  startDate?: string;         // 起息日 YYYY-MM-DD
-  maturityDate?: string;      // 到期日 YYYY-MM-DD（可手动填，也可由起息日+期限自动算）
-  maturityValue?: number;     // 到期金额（手动填，否则自动算）
+  startDate?: string;         // 起息日 / 买入日 YYYY-MM-DD
+  maturityDate?: string;      // 到期日 YYYY-MM-DD
 
-  // 基金类
-  annualizedReturn?: number;  // 年化收益率 %
-  totalReturn?: number;       // 累计收益金额（CNY）
+  // 截图识别带回的"App 显示值"，仅作为 LLM 计算的参考输入，UI 不直接展示。
+  // @deprecated 不要在 UI 里读这两个字段；改读 derived。
+  totalReturn?: number;
+  annualizedReturn?: number;
+  /** @deprecated 用 derived.maturityValue */
+  maturityValue?: number;
+
+  /** LLM/系统算出的派生字段 */
+  derived?: AssetDerived;
+  /** 派生字段最近一次计算的时间戳 */
+  derivedAt?: number;
+  /** 缺哪些基础事实字段，导致 LLM 无法算（key 列表，如 ['interestRate', 'startDate']） */
+  missingFields?: string[];
 
   createdAt: number;
   updatedAt: number;
@@ -62,6 +88,8 @@ export interface Goal {
   createdAt: number;
 }
 
+export type DeriveMode = 'batch' | 'parallel';
+
 export interface Settings {
   id?: number;
   apiKey?: string;
@@ -72,4 +100,8 @@ export interface Settings {
   analystModelOrder?: string[];   // 理财分析模型用户自定义顺序
   analystEnabled?: Record<string, boolean>;   // 每个分析模型是否启用
   ensembleSize?: number;          // 1-3，每次用 N 个模型交叉验证
+  /** 派生字段计算模式：batch=整库一次 prompt（默认） / parallel=每条一次并发 */
+  deriveMode?: DeriveMode;
+  /** 整库最近一次重算时间戳；> 12h 时下次 load 自动重算 */
+  derivedAllAt?: number;
 }

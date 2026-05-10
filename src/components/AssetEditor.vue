@@ -26,14 +26,11 @@ const form = reactive({
   tickerSymbol: '',
   tickerType: 'none' as 'cn-stock' | 'hk-stock' | 'us-stock' | 'cn-fund' | 'none',
   shares: undefined as number | undefined,
-  // 固收
+  // 固收 / 基金共用基础事实
   termMonths: undefined as number | undefined,
   interestRate: undefined as number | undefined,
   startDate: '',
-  maturityDate: '',
-  // 基金
-  annualizedReturn: undefined as number | undefined,
-  totalReturn: undefined as number | undefined
+  maturityDate: ''
 });
 
 watch(() => props.open, (o) => {
@@ -44,8 +41,7 @@ watch(() => props.open, (o) => {
       cost: undefined, dailyChange: undefined, dailyChangePct: undefined,
       note: '',
       tickerSymbol: '', tickerType: 'none', shares: undefined,
-      termMonths: undefined, interestRate: undefined, startDate: '', maturityDate: '',
-      annualizedReturn: undefined, totalReturn: undefined
+      termMonths: undefined, interestRate: undefined, startDate: '', maturityDate: ''
     });
     if (props.initial) Object.assign(form, props.initial);
   }
@@ -70,14 +66,14 @@ function save() {
     tickerSymbol: form.tickerSymbol?.trim().toUpperCase() || undefined,
     tickerType: form.tickerType === 'none' ? undefined : form.tickerType as any,
     shares: form.shares,
-    // 固收类
+    // 固收类基础事实
     termMonths: isFixedIncome.value ? form.termMonths : undefined,
     interestRate: isFixedIncome.value ? form.interestRate : undefined,
-    startDate: isFixedIncome.value ? (form.startDate || undefined) : undefined,
-    maturityDate: isFixedIncome.value ? (form.maturityDate || undefined) : undefined,
-    // 基金类
-    annualizedReturn: isFund.value ? form.annualizedReturn : undefined,
-    totalReturn: isFund.value ? form.totalReturn : undefined
+    // startDate 既是固收的"起息日"也是基金的"买入日"，realestate/stock 也可作"买入日"
+    startDate: (isFixedIncome.value || isFund.value || form.category === 'stock' || form.category === 'realestate')
+      ? (form.startDate || undefined)
+      : undefined,
+    maturityDate: isFixedIncome.value ? (form.maturityDate || undefined) : undefined
   });
 }
 </script>
@@ -124,15 +120,18 @@ function save() {
         </Field>
       </div>
 
-      <Field label="持仓成本 (可选)">
+      <Field label="持仓成本 (基金/股票/房产建议填，用于自动算收益)">
         <input v-model.number="form.cost" type="number" step="0.01" class="field-input" />
       </Field>
 
-      <!-- 固收类（存款/理财）字段组 -->
+      <!-- 固收类（存款/理财）基础事实组 -->
       <div v-if="isFixedIncome" class="bg-bg/60 rounded-icon p-3 flex flex-col gap-3">
         <div class="flex items-center gap-1.5 text-[11px] text-ink-muted font-700">
           <span class="i-ph-bank-duotone text-brand text-sm" />
-          {{ form.category === 'deposit' ? '存款细节' : '理财细节' }}
+          {{ form.category === 'deposit' ? '存款基础信息' : '理财基础信息' }}
+          <span class="ml-auto px-1.5 h-3.5 inline-flex items-center rounded bg-brand/15 text-brand text-[9px] font-700">
+            收益由 AI 自动算
+          </span>
         </div>
         <div class="grid grid-cols-2 gap-2">
           <Field label="期限（月）">
@@ -148,31 +147,30 @@ function save() {
           <Field label="起息日">
             <input v-model="form.startDate" type="date" class="field-input" />
           </Field>
-          <Field label="到期日 (可选 · 自动算)">
+          <Field label="到期日 (可选)">
             <input v-model="form.maturityDate" type="date" class="field-input" />
           </Field>
         </div>
         <p class="text-[10px] text-ink-muted leading-relaxed">
-          填了起息日 + 期限会自动算到期日；填了利率会自动算到期收益。
+          只填基础事实即可。距到期天数、到期收益、年化都由 AI 自动计算，无需手填。
         </p>
       </div>
 
-      <!-- 基金字段组 -->
+      <!-- 基金基础事实组 -->
       <div v-if="isFund" class="bg-bg/60 rounded-icon p-3 flex flex-col gap-3">
         <div class="flex items-center gap-1.5 text-[11px] text-ink-muted font-700">
           <span class="i-ph-chart-pie-slice-duotone text-brand text-sm" />
-          基金细节
+          基金基础信息
+          <span class="ml-auto px-1.5 h-3.5 inline-flex items-center rounded bg-brand/15 text-brand text-[9px] font-700">
+            收益由 AI 自动算
+          </span>
         </div>
-        <div class="grid grid-cols-2 gap-2">
-          <Field label="累计收益 ¥">
-            <input v-model.number="form.totalReturn" type="number" step="0.01"
-                   placeholder="3000" class="field-input" />
-          </Field>
-          <Field label="年化收益率 %">
-            <input v-model.number="form.annualizedReturn" type="number" step="0.01"
-                   placeholder="8.2" class="field-input" />
-          </Field>
-        </div>
+        <Field label="买入日（首笔）">
+          <input v-model="form.startDate" type="date" class="field-input" />
+        </Field>
+        <p class="text-[10px] text-ink-muted leading-relaxed">
+          填了买入日 + 持仓成本，AI 会自动算累计收益、收益率、年化。
+        </p>
       </div>
 
       <!-- 行情自动更新（基金/股票） -->

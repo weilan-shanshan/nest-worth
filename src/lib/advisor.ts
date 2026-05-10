@@ -141,7 +141,8 @@ async function callOne(model: string, prompt: string, system: string, apiKey: st
   const res = await fetch(ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(90_000)
   });
   if (!res.ok) {
     const text = await res.text();
@@ -160,7 +161,7 @@ function isQuotaErr(e: any): boolean {
   return ['quota', 'allocation', 'used up', 'arrearage', 'rate_limit', 'model not found', 'modelnotfound'].some(k => msg.includes(k));
 }
 
-async function callText(prompt: string, system: string, useAnalyst = false): Promise<{ content: string; modelUsed: string; ensembleModels?: string[] }> {
+export async function callText(prompt: string, system: string, useAnalyst = false): Promise<{ content: string; modelUsed: string; ensembleModels?: string[] }> {
   const settings = await getOrInitSettings();
   const apiKey = settings.apiKey || import.meta.env.VITE_DASHSCOPE_API_KEY;
   if (!apiKey) throw new Error('未配置 API Key');
@@ -258,7 +259,7 @@ ${successful.map((s, i) => `===== 模型 ${i + 1} (${s.name}) =====\n${s.content
   }
 }
 
-function safeJson<T>(text: string): T | null {
+export function safeJson<T>(text: string): T | null {
   try { return JSON.parse(text); } catch {
     const m = text.match(/\{[\s\S]*\}/);
     if (m) { try { return JSON.parse(m[0]); } catch { /* */ } }
