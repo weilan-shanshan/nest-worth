@@ -94,6 +94,7 @@ export default defineConfig({
     'i-ph-caret-left-bold', 'i-ph-list-checks-duotone', 'i-ph-rocket-launch-duotone',
     'i-ph-database-duotone', 'i-ph-globe-duotone', 'i-ph-code-duotone',
     'i-ph-shuffle-duotone', 'i-ph-clock-duotone',
-    'i-ph-lock-key-duotone', 'i-ph-users-three-duotone', 'i-ph-x-circle-duotone'
+    'i-ph-lock-key-duotone', 'i-ph-users-three-duotone', 'i-ph-x-circle-duotone',
+    'i-ph-arrow-square-out-duotone', 'i-ph-paper-plane-tilt-duotone'
   ]
 });

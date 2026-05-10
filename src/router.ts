@@ -6,7 +6,8 @@ const routes: RouteRecordRaw[] = [
   { path: '/trend', name: 'trend', component: () => import('./views/Trend.vue'), meta: { title: '走势' } },
   { path: '/goals', name: 'goals', component: () => import('./views/Goals.vue'), meta: { title: '目标' } },
   { path: '/settings', name: 'settings', component: () => import('./views/Settings.vue'), meta: { title: '设置' } },
-  { path: '/about', name: 'about', component: () => import('./views/About.vue'), meta: { title: '关于' } }
+  { path: '/about', name: 'about', component: () => import('./views/About.vue'), meta: { title: '关于' } },
+  { path: '/setup-key', name: 'setupKey', component: () => import('./views/KeySetup.vue'), meta: { title: '配置 AI' } }
 ];
 
 const router = createRouter({

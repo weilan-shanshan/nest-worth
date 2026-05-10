@@ -15,3 +15,6 @@ dev-dist
 # 本地工具配置（沙箱 / 预览相关）
 .claude/
 package-lock.json
+
+# Vite 临时文件
+vite.config.ts.timestamp-*

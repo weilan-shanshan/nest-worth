@@ -170,14 +170,25 @@ function toast(msg: string) {
       <span class="i-ph-caret-right-bold text-base opacity-70 shrink-0" />
     </button>
 
-    <!-- API Key -->
+    <!-- API Key 状态卡 -->
     <section class="card-base">
       <div class="flex items-center gap-2 mb-2">
         <span class="i-ph-key-duotone text-brand text-lg" />
         <h3 class="font-700 text-[15px]">Qwen-VL API Key</h3>
+        <span v-if="store.hasApiKey"
+              class="ml-auto inline-flex items-center gap-1 px-2 h-5 rounded-full bg-pos/15 text-pos text-[10px] font-700">
+          <span class="i-ph-check-circle-duotone" />已配置
+        </span>
+        <span v-else
+              class="ml-auto inline-flex items-center gap-1 px-2 h-5 rounded-full bg-orange/15 text-orange text-[10px] font-700">
+          <span class="i-ph-warning-circle-duotone" />未配置
+        </span>
       </div>
       <p class="text-[11px] text-ink-muted leading-relaxed mb-3">
-        用于截图识别。<a href="https://bailian.console.aliyun.com/" target="_blank" class="text-brand underline">阿里云百炼控制台</a> 申请，按量付费，¥0.004/张。
+        用于截图识别 + AI 理财分析。如果不会申请，
+        <button class="text-brand font-700 underline" @click="router.push({ path: '/setup-key', query: { from: '/settings' } })">
+          看保姆级引导 →
+        </button>
       </p>
       <div class="relative">
         <input

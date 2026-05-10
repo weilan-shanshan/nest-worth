@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useAppStore } from '../store/assets';
 
 const props = defineProps<{
@@ -16,8 +16,13 @@ const emit = defineEmits<{ (e: 'refresh'): void }>();
 const iconClass = computed(() => props.icon || 'i-ph-lightbulb-duotone');
 const store = useAppStore();
 const router = useRouter();
+const route = useRoute();
 
 const ensembleSize = computed(() => store.settings.ensembleSize || 1);
+
+function goSetup() {
+  router.push({ path: '/setup-key', query: { from: route.fullPath } });
+}
 </script>
 
 <template>
@@ -38,7 +43,24 @@ const ensembleSize = computed(() => store.settings.ensembleSize || 1);
       </button>
     </div>
 
-    <div v-if="loading" class="text-[12px] text-ink-muted py-2 flex items-center gap-2">
+    <!-- 优先级最高：未配置 Key 的强引导 CTA（盖过 loading/error/empty）-->
+    <div v-if="!store.hasApiKey" class="rounded-icon bg-gradient-to-br from-orange/15 to-orange/5 border border-orange/30 p-3.5 mt-1">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="i-ph-rocket-launch-duotone text-orange text-lg" />
+        <span class="font-700 text-[13px] text-ink">解锁 AI 顾问 · 5 分钟搞定</span>
+      </div>
+      <p class="text-[11px] text-ink-muted leading-relaxed mb-3">
+        本卡片需要 AI 模型生成。阿里云百炼新用户每个模型送 100 万 token 免费额度，
+        约够 <b>{{ title.includes('持仓') ? '500+ 次持仓分析' : '300+ 次目标方案生成' }}</b>。
+      </p>
+      <button class="tap w-full h-10 rounded-icon bg-orange text-white font-700 text-sm flex items-center justify-center gap-1.5"
+              @click="goSetup">
+        <span class="i-ph-arrow-circle-right-duotone text-base" />
+        立即配置（带保姆级引导）
+      </button>
+    </div>
+
+    <div v-else-if="loading" class="text-[12px] text-ink-muted py-2 flex items-center gap-2">
       <span class="i-ph-sparkle-duotone text-brand text-base animate-pulse" />
       AI 分析中…（首次约 5-15 秒，结果会缓存 24h）
     </div>

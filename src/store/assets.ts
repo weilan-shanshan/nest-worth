@@ -34,6 +34,11 @@ export const useAppStore = defineStore('app', () => {
     assets.value.reduce((sum, x) => sum + x.balance, 0)
   );
 
+  const hasApiKey = computed(() => {
+    const k = settings.value.apiKey?.trim() || (import.meta.env.VITE_DASHSCOPE_API_KEY as string | undefined)?.trim();
+    return !!(k && k.startsWith('sk-'));
+  });
+
   const dailyChange = computed(() =>
     assets.value.reduce((sum, x) => sum + (x.dailyChange || 0), 0)
   );
@@ -185,7 +190,7 @@ export const useAppStore = defineStore('app', () => {
 
   return {
     assets, snapshots, goals, settings, ready,
-    totalNetWorth, dailyChange, dailyChangePct, byCategory,
+    totalNetWorth, dailyChange, dailyChangePct, byCategory, hasApiKey,
     load, addAsset, updateAsset, deleteAsset,
     addGoal, updateGoal, deleteGoal,
     setApiKey, setPrivacy, refreshSettings, exportAll, importAll

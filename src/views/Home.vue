@@ -105,6 +105,24 @@ function maskOrShow(text: string) {
 
 <template>
   <div class="px-4 pt-10 flex flex-col gap-3">
+    <!-- 未配置 Key CTA banner（强引导） -->
+    <button
+      v-if="!store.hasApiKey"
+      class="tap rounded-card p-3.5 text-left bg-gradient-to-br from-orange to-[#E58A0F] text-white shadow-[0_8px_24px_rgba(245,166,35,0.28)] flex items-center gap-3"
+      @click="router.push({ path: '/setup-key', query: { from: '/' } })"
+    >
+      <div class="w-10 h-10 rounded-icon bg-white/20 flex items-center justify-center shrink-0">
+        <span class="i-ph-rocket-launch-duotone text-xl" />
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="font-700 text-[14px] leading-tight">还差一步，开启完整 AI 能力</div>
+        <div class="text-[10px] opacity-90 mt-0.5 leading-relaxed">
+          截图识别 · 持仓分析 · 目标方案 都需要 1 个免费 API Key（5 分钟搞定）
+        </div>
+      </div>
+      <span class="i-ph-caret-right-bold text-base opacity-80 shrink-0" />
+    </button>
+
     <!-- 顶栏 -->
     <header class="flex items-center justify-between">
       <div class="flex items-baseline gap-0.5 font-brand">

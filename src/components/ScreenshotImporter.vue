@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useRouter } from 'vue-router';
 import Modal from './Modal.vue';
 import AssetIcon from './AssetIcon.vue';
 import { recognizeAssetScreenshot, MODEL_CHAIN, type RecognizedAsset } from '../lib/recognize';
 import { useAppStore } from '../store/assets';
 import { CATEGORY_MAP } from '../lib/asset-meta';
 import { formatMoney } from '../lib/format';
+
+const router = useRouter();
 
 defineProps<{ open: boolean }>();
 const emit = defineEmits<{
@@ -76,6 +79,11 @@ function reset() {
   newlyExhausted.value = [];
 }
 
+function goSetup() {
+  emit('close');
+  router.push({ path: '/setup-key', query: { from: '/' } });
+}
+
 function close() {
   reset();
   emit('close');
@@ -84,9 +92,42 @@ function close() {
 
 <template>
   <Modal :open="open" title="截图识别资产" @close="close">
-    <div class="flex flex-col gap-4">
+    <!-- 未配置 Key 时：替换为引导视图 -->
+    <div v-if="!store.hasApiKey" class="flex flex-col gap-4">
+      <div class="rounded-card bg-gradient-to-br from-orange to-[#E58A0F] text-white p-5">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="i-ph-camera-duotone text-2xl" />
+          <h3 class="font-700 text-base">截图识别需要 1 个 AI Key</h3>
+        </div>
+        <p class="text-[12px] opacity-90 leading-relaxed">
+          阿里云百炼新用户每个视觉模型送 100 万 token 免费额度，<br/>
+          约够识别 <b>3500+ 张</b>截图，<b>完全免费起步</b>。
+        </p>
+      </div>
+
+      <div class="bg-bg/60 rounded-icon p-3 text-[12px] text-ink-muted leading-relaxed">
+        <div class="font-700 text-ink mb-1.5">5 分钟流程：</div>
+        <div class="flex gap-2 mb-1"><span class="text-brand">①</span> 注册阿里云账号（已有可跳过）</div>
+        <div class="flex gap-2 mb-1"><span class="text-brand">②</span> 进入百炼控制台开通服务</div>
+        <div class="flex gap-2 mb-1"><span class="text-brand">③</span> 创建 sk- 开头的 API Key</div>
+        <div class="flex gap-2"><span class="text-brand">④</span> 粘贴到这里 → 立即生效</div>
+      </div>
+
+      <button
+        class="tap h-12 rounded-icon bg-brand text-white font-700 text-sm flex items-center justify-center gap-2"
+        @click="goSetup"
+      >
+        <span class="i-ph-rocket-launch-duotone text-base" />
+        开始配置（带保姆级引导）
+      </button>
+
+      <button class="tap text-[11px] text-ink-muted font-600 py-1" @click="close">先关闭</button>
+    </div>
+
+    <!-- 已配置：原有的识别流程 -->
+    <div v-else class="flex flex-col gap-4">
       <p class="text-xs text-ink-muted leading-relaxed">
-        上传银行/支付宝/券商 App 截图，AI 自动识别资产并填入。需先在「设置」配置 Qwen-VL API Key。
+        上传银行/支付宝/券商 App 截图，AI 自动识别资产并填入。
       </p>
 
       <label class="block tap rounded-card border-2 border-dashed border-border bg-brand-50/40 p-6 text-center cursor-pointer">
