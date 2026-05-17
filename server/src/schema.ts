@@ -66,6 +66,21 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
  *   - trialEndsAt：可选，试用结束时间，规则同上
  *   - createIfMissing：可选，目标 email 不存在时是否自动创建用户；默认 false
  */
+/**
+ * 用户提交升档意向（前端 Pricing 升级 modal 触发）。
+ * 不真触发升档——只是让作者知道有人想付费 / 已付款，作者人工对账后再用
+ * /admin/grant-tier 真正升档。
+ *
+ * billing 不强约束（用户可能填错或 lie），作者收到后看实际打款金额决定。
+ */
+export const upgradeRequestSchema = z.object({
+  targetTier: z.enum(['plus', 'pro', 'max', 'studio']),
+  billing: z.enum(['month', 'year', 'lifetime']),
+  paymentMethod: z.enum(['wechat', 'alipay', 'other']),
+  /** 可选备注：付款截图链接、特殊需求等 */
+  note: z.string().max(500).optional()
+}).strict();
+
 export const grantTierSchema = z.object({
   email: z.string().email().max(254),
   tier: z.enum(SUBSCRIPTION_TIERS),

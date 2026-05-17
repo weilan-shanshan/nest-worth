@@ -2,10 +2,20 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAccountStore } from '../store/account';
+import UpgradeModal from '../components/UpgradeModal.vue';
 
 const router = useRouter();
 const accountStore = useAccountStore();
 const billing = ref<'month' | 'year'>('year');
+
+const modalOpen = ref(false);
+const modalPlan = ref<{
+  key: 'plus' | 'pro' | 'max' | 'studio';
+  name: string;
+  priceMonth: number | null;
+  priceYear: number | null;
+  oneTime?: number;
+} | null>(null);
 
 onMounted(() => { void accountStore.refresh(); });
 
@@ -112,8 +122,20 @@ function onCta(p: Plan) {
     if (!accountStore.isAuthed) router.push('/auth/login');
     return;
   }
-  // Sprint 3 Day 1：所有付费档暂时都跳「联系作者」 fallback；Day 4 加邮件 + 收款码 modal
-  alert(`升级 ${p.name}\n\n商业化通道正在搭建（自动支付 Sprint 3 Day 4 上线）。\n暂时请联系作者：huoqilei.hql@alibaba-inc.com\n附上邮箱 + 想升级的档位 + 月/年付，作者人工开通。`);
+  // 未登录 → 跳登录页（带 from=/pricing 让登录后回来）
+  if (!accountStore.isAuthed) {
+    router.push({ path: '/auth/login', query: { from: '/pricing' } });
+    return;
+  }
+  // 已登录 → 打开升级 modal（含收款码 + 4 步说明 + 通知作者）
+  modalPlan.value = {
+    key: p.key as 'plus' | 'pro' | 'max' | 'studio',
+    name: p.name,
+    priceMonth: p.priceMonth,
+    priceYear: p.priceYear,
+    oneTime: p.oneTime
+  };
+  modalOpen.value = true;
 }
 </script>
 
@@ -242,5 +264,12 @@ function onCta(p: Plan) {
       4 年后所有源码自动转 AGPL-3.0，详见
       <button class="underline text-brand" @click="router.push('/about')">关于</button>
     </p>
+
+    <UpgradeModal
+      :open="modalOpen"
+      :plan="modalPlan"
+      :initial-billing="billing"
+      @close="modalOpen = false"
+    />
   </div>
 </template>
