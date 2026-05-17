@@ -1,5 +1,6 @@
 import type { AssetCategory } from '../types';
 import { getOrInitSettings, updateSettings } from '../db';
+import { pickLlmMode, recognizeViaProxy } from './llm-client';
 
 export interface RecognizedAsset {
   platform?: string;
@@ -119,7 +120,19 @@ const SYSTEM_PROMPT = `你是一个金融资产识别助手。用户会上传一
 
 const ENDPOINT = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 
+/**
+ * 截图识别入口。按 pickLlmMode() 决定走代付还是 BYOK 直连。
+ *   - proxy（已登录且非 Studio）→ server 代付，扣平台配额
+ *   - byok（未登录或 Studio）→ 本地 Key，原模型链 fallback 逻辑不变
+ */
 export async function recognizeAssetScreenshot(file: File): Promise<RecognizeResult> {
+  if (pickLlmMode() === 'proxy') {
+    return recognizeViaProxy(file);
+  }
+  return recognizeViaByok(file);
+}
+
+async function recognizeViaByok(file: File): Promise<RecognizeResult> {
   const settings = await getOrInitSettings();
   const apiKey = settings.apiKey || import.meta.env.VITE_DASHSCOPE_API_KEY;
   if (!apiKey) {
