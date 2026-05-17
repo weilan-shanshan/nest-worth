@@ -81,3 +81,68 @@ function fileToDataUrl(file: File): Promise<string> {
     r.readAsDataURL(file);
   });
 }
+
+// ============================================================================
+// 分析（Sprint 2 Day 2）
+// ============================================================================
+
+interface AnalysisProxyResponse {
+  content: string;
+  modelUsed: string;
+  ensembleModels: string[];
+  actualEnsembleSize: number;
+  quota: { used: number; quota: number };
+  trace: string;
+}
+
+export interface AnalysisResult {
+  content: string;
+  modelUsed: string;
+  ensembleModels: string[];
+  actualEnsembleSize: number;
+}
+
+/**
+ * 走 server 代付路径调分析（持仓分析 / 目标方案 / 综合）。
+ * 1 次调用 = 1 个 analysis 配额（无论内部 N=1/2/3）。
+ * 内部成本由 server 端按各模型独立计费写 usage_events，trace_id 串联。
+ */
+export async function runAnalysisViaProxy(opts: {
+  prompt: string;
+  system: string;
+  ensembleSize: number;
+}): Promise<AnalysisResult> {
+  try {
+    const res = await api<AnalysisProxyResponse>('/llm/analysis', {
+      body: { prompt: opts.prompt, system: opts.system, ensembleSize: opts.ensembleSize }
+    });
+    const account = useAccountStore();
+    if (account.quota) {
+      account.quota.analysis = res.quota;
+    }
+    return {
+      content: res.content,
+      modelUsed: res.modelUsed,
+      ensembleModels: res.ensembleModels,
+      actualEnsembleSize: res.actualEnsembleSize
+    };
+  } catch (e) {
+    const err = e as ApiError;
+    if (err.code === 'analysis_quota_exceeded') {
+      throw new Error('本月 AI 分析配额已用完，升级或下月初自动刷新');
+    }
+    if (err.code === 'upstream_quota_exhausted') {
+      throw new Error('平台分析模型暂时额度耗尽，请稍后重试或切到 BYOK 模式（设置 → 高级）');
+    }
+    if (err.code === 'upstream_timeout') {
+      throw new Error('分析超时（>90s），请稍后重试或减少交叉验证档位');
+    }
+    if (err.code === 'upstream_error') {
+      throw new Error('分析失败：' + (err.message || '上游模型错误'));
+    }
+    if (err.status === 401) {
+      throw new Error('登录已过期，请重新登录');
+    }
+    throw new Error(err.message || '分析失败，请稍后重试');
+  }
+}

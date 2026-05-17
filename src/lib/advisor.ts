@@ -3,6 +3,7 @@ import { getOrInitSettings, db } from '../db';
 import { MODEL_CHAIN, ANALYST_CHAIN, type AnalystModel } from './recognize';
 import { CATEGORY_MAP } from './asset-meta';
 import { fetchMarketSnapshot, formatSnapshotForPrompt, type MarketSnapshot } from './market-data';
+import { pickLlmMode, runAnalysisViaProxy } from './llm-client';
 
 /**
  * 文本建议 / 分析模块。
@@ -259,6 +260,24 @@ ${successful.map((s, i) => `===== 模型 ${i + 1} (${s.name}) =====\n${s.content
   }
 }
 
+/**
+ * 用户主动触发的分析（持仓诊断 / 目标方案）入口。
+ * 与 callText 的区别：
+ *   - 走 dispatcher：proxy 模式走 server 代付（扣 1 analysis 配额）；byok 模式
+ *     沿用 callText analyst chain 逻辑
+ *   - 派生数据 (derive.ts) 不要走这里，因为高频 60+ 次/月会瞬间烧光配额；
+ *     derive.ts 继续直接调 callText（byok）
+ */
+export async function callUserAnalysis(prompt: string, system: string): Promise<{ content: string; modelUsed: string; ensembleModels?: string[] }> {
+  if (pickLlmMode() === 'proxy') {
+    const settings = await getOrInitSettings();
+    const ensembleSize = Math.max(1, Math.min(3, settings.ensembleSize ?? 1));
+    const r = await runAnalysisViaProxy({ prompt, system, ensembleSize });
+    return { content: r.content, modelUsed: r.modelUsed, ensembleModels: r.ensembleModels };
+  }
+  return callText(prompt, system, true);
+}
+
 export function safeJson<T>(text: string): T | null {
   try { return JSON.parse(text); } catch {
     const m = text.match(/\{[\s\S]*\}/);
@@ -304,7 +323,7 @@ export async function analyzeAssets(assets: Asset[]): Promise<{ items: AssetAdvi
   const total = assets.reduce((s, a) => s + a.balance, 0);
   const marketBlock = market ? `\n${formatSnapshotForPrompt(market)}\n` : '';
   const prompt = `${marketBlock}\n用户持仓共 ${assets.length} 项，总额 ¥${total.toFixed(0)}：\n${lines}\n\n请结合上方市场数据逐项分析。`;
-  const { content: raw, modelUsed, ensembleModels } = await callText(prompt, ASSET_SYSTEM, true);
+  const { content: raw, modelUsed, ensembleModels } = await callUserAnalysis(prompt, ASSET_SYSTEM);
   const parsed = safeJson<{ items: AssetAdvice[] }>(raw);
   if (!parsed?.items) throw new Error('模型返回格式异常');
 
@@ -393,7 +412,7 @@ ${breakdown}
 
 请基于上方实时市场数据 + 用户情况，输出 JSON 格式的整体增值方案。新增配置的预期收益要参考市场快照里的实际数据（如汇率变动、黄金价格）做合理判断。`;
 
-  const { content: raw, modelUsed, ensembleModels } = await callText(prompt, GOAL_SYSTEM, true);
+  const { content: raw, modelUsed, ensembleModels } = await callUserAnalysis(prompt, GOAL_SYSTEM);
   const parsed = safeJson<any>(raw);
   if (!parsed) throw new Error('模型返回格式异常');
 
