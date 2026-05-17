@@ -13,7 +13,7 @@ export default defineConfig({
       injectRegister: 'auto',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Nestworth · 巢值',
+        name: 'Nestworth · 净值',
         short_name: 'Nestworth',
         description: '把分散在各 App 的资产汇成一处可视画面 · 100% 本地 · 推理 AI · 多模型交叉',
         theme_color: '#2E9E60',

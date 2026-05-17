@@ -1,4 +1,4 @@
-# Nestworth · 巢值
+# Nestworth · 净值
 
 ## 项目概述
 
@@ -122,7 +122,7 @@ Nestworth/
 
 | 术语 | 含义 |
 | ---- | ---- |
-| Nestworth / 巢值 | 项目品牌名。Nest = 储蓄/老底（英文 Nest Egg），worth = 价值；中文「巢值」谐音"超值" |
+| Nestworth / 净值 | 项目品牌名。Nest = 储蓄/老底（英文 Nest Egg），worth = 价值；中文「净值」谐音"超值" |
 | `MODEL_CHAIN` | 视觉模型链（`src/lib/recognize.ts`）— 7 个百炼 VL 模型，截图识别用，按性价比排序，失败自动 fallback |
 | `ANALYST_CHAIN` | 文本/分析模型链（同文件）— 7 个推理/对话模型（DeepSeek-R1 → Qwen-Max → DeepSeek-V3 → ...），理财分析用 |
 | 交叉验证 N=2/3 | 同一 prompt 并行调 N 个模型 → 第 N+1 次让最强模型综合，去除离群 |

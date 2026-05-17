@@ -1,4 +1,4 @@
-# Nestworth · 巢值
+# Nestworth · 净值
 
 [![Build](https://github.com/weilan-shanshan/nest-worth/actions/workflows/build.yml/badge.svg)](https://github.com/weilan-shanshan/nest-worth/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -270,5 +270,5 @@ node scripts/screenshots.mjs
 
 ---
 
-**Nestworth · 巢值**
+**Nestworth · 净值**
 *为想认真看清自己资产的人而做*

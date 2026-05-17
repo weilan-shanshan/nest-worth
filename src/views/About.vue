@@ -119,7 +119,7 @@ const promises = [
       <div class="flex items-baseline gap-0.5 font-brand mb-2">
         <span class="text-2xl font-700">Nest</span>
         <span class="text-2xl font-700 opacity-70">worth</span>
-        <span class="ml-2 text-[11px] font-600 px-1.5 py-0.5 rounded bg-white/20">巢值</span>
+        <span class="ml-2 text-[11px] font-600 px-1.5 py-0.5 rounded bg-white/20">净值</span>
       </div>
       <h2 class="text-[19px] font-700 leading-snug">
         一切关乎"你值多少"的事，<br/>
@@ -283,7 +283,7 @@ const promises = [
 
     <!-- 版本 -->
     <div class="text-center text-[11px] text-ink-muted py-2 leading-relaxed">
-      Nestworth · 巢值 v0.2.0<br/>
+      Nestworth · 净值 v0.2.0<br/>
       <span class="opacity-70">为想认真看清自己资产的人而做</span>
     </div>
   </div>
