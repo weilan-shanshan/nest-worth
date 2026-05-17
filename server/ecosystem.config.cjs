@@ -11,7 +11,9 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       max_restarts: 10,
-      max_memory_restart: '300M',
+      // Sprint 0-3 商业化后含 jose + nodemailer + tencentcloud-sdk + bailian-analyst
+      // 实测峰值 ~250MB；500M 留 2x 缓冲，超过自动重启防 OOM
+      max_memory_restart: '500M',
       out_file: 'logs/out.log',
       error_file: 'logs/err.log',
       merge_logs: true,
