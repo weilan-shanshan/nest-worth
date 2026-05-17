@@ -11,6 +11,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/setup-key', name: 'setupKey', component: () => import('./views/KeySetup.vue'), meta: { title: '配置 AI' } },
   { path: '/auth/login', name: 'authLogin', component: () => import('./views/Login.vue'), meta: { title: '登录' } },
   { path: '/auth/verify', name: 'authVerify', component: () => import('./views/AuthVerify.vue'), meta: { title: '验证登录' } },
+  { path: '/pricing', name: 'pricing', component: () => import('./views/Pricing.vue'), meta: { title: '订阅档位' } },
   {
     // 隐藏后台：路径含密码 token，token 在 env 注入；前端不放导航 / sitemap，并 noindex
     path: '/_admin/:token',

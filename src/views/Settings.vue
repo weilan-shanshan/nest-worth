@@ -255,12 +255,21 @@ function toast(msg: string) {
               <span v-if="periodEnd"> · 到期 {{ periodEnd }}</span>
             </div>
           </div>
-          <button
-            class="tap text-[11px] text-ink-muted px-2.5 py-1 rounded border border-line"
-            @click="accountStore.signOut()"
-          >
-            退出
-          </button>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button
+              v-if="accountStore.tier !== 'max' && accountStore.tier !== 'studio'"
+              class="tap text-[12px] font-700 px-2.5 py-1 rounded bg-brand text-white"
+              @click="router.push('/pricing')"
+            >
+              升级
+            </button>
+            <button
+              class="tap text-[11px] text-ink-muted px-2.5 py-1 rounded border border-line"
+              @click="accountStore.signOut()"
+            >
+              退出
+            </button>
+          </div>
         </div>
 
         <!-- 当月配额进度条 -->
@@ -283,12 +292,20 @@ function toast(msg: string) {
       <div v-else>
         <div class="flex items-center justify-between gap-3 mb-2">
           <div class="text-[13px] font-600">Free · 未登录</div>
-          <button
-            class="tap text-[12px] font-600 px-3 py-1.5 rounded bg-brand text-white"
-            @click="router.push('/auth/login')"
-          >
-            登录
-          </button>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button
+              class="tap text-[11px] text-ink-muted px-2.5 py-1 rounded border border-line"
+              @click="router.push('/pricing')"
+            >
+              看档位
+            </button>
+            <button
+              class="tap text-[12px] font-600 px-3 py-1.5 rounded bg-brand text-white"
+              @click="router.push('/auth/login')"
+            >
+              登录
+            </button>
+          </div>
         </div>
         <div class="text-[11px] text-ink-muted leading-relaxed">
           商业化档位（Plus / Pro / Max / Studio）即将上线；登录后才能使用平台代付的 LLM 配额、复盘 PDF 等服务。
