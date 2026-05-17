@@ -44,6 +44,11 @@ export async function recognizeViaProxy(file: File): Promise<RecognizeResult> {
   const dataUrl = await fileToDataUrl(file);
   try {
     const res = await api<OcrProxyResponse>('/llm/ocr', { body: { image: dataUrl } });
+    // 服务端已返回扣后 quota；同步进 store 让进度条立即更新
+    const account = useAccountStore();
+    if (account.quota) {
+      account.quota.ocr = res.quota;
+    }
     return {
       items: res.items,
       modelUsed: res.model,

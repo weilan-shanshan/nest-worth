@@ -7,6 +7,7 @@ import { db, updateAnalystConfig, updateSettings } from '../db';
 import { MODEL_CHAIN, ANALYST_CHAIN, resetExhaustedModels, setPreferredModel } from '../lib/recognize';
 import { clearAdviceCache } from '../lib/advisor';
 import InstallEntryCard from '../components/InstallEntryCard.vue';
+import QuotaBar from '../components/QuotaBar.vue';
 import { isQuoteProxyConfigured } from '../lib/quotes';
 import { trackCta } from '../lib/analytics';
 import type { DeriveMode } from '../types';
@@ -224,21 +225,40 @@ function toast(msg: string) {
         <span class="i-ph-user-circle-duotone text-brand text-lg" />
         <h3 class="font-700 text-[15px]">账号</h3>
       </div>
-      <div v-if="accountStore.isAuthed" class="flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <div class="text-[13px] font-600">{{ tierLabel }}</div>
-          <div class="text-[11px] text-ink-muted mt-0.5">
-            <span v-if="accountStore.me?.status === 'trialing'">试用中</span>
-            <span v-else>{{ accountStore.me?.status === 'active' ? '订阅中' : accountStore.me?.status }}</span>
-            <span v-if="periodEnd"> · 到期 {{ periodEnd }}</span>
+      <div v-if="accountStore.isAuthed">
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <div class="min-w-0">
+            <div class="text-[13px] font-600">{{ tierLabel }}</div>
+            <div class="text-[11px] text-ink-muted mt-0.5">
+              <span v-if="accountStore.me?.status === 'trialing'">试用中</span>
+              <span v-else>{{ accountStore.me?.status === 'active' ? '订阅中' : accountStore.me?.status }}</span>
+              <span v-if="periodEnd"> · 到期 {{ periodEnd }}</span>
+            </div>
+          </div>
+          <button
+            class="tap text-[11px] text-ink-muted px-2.5 py-1 rounded border border-line"
+            @click="accountStore.signOut()"
+          >
+            退出
+          </button>
+        </div>
+
+        <!-- 当月配额进度条 -->
+        <div v-if="accountStore.quota" class="space-y-2.5 pt-2.5 border-t border-line">
+          <QuotaBar
+            label="截图识别"
+            :used="accountStore.quota.ocr.used"
+            :quota="accountStore.quota.ocr.quota"
+          />
+          <QuotaBar
+            label="AI 分析"
+            :used="accountStore.quota.analysis.used"
+            :quota="accountStore.quota.analysis.quota"
+          />
+          <div class="text-[10px] text-ink-muted">
+            本月配额 · {{ accountStore.quota.periodStart }} 起算 · 每月 1 号刷新
           </div>
         </div>
-        <button
-          class="tap text-[11px] text-ink-muted px-2.5 py-1 rounded border border-line"
-          @click="accountStore.signOut()"
-        >
-          退出
-        </button>
       </div>
       <div v-else>
         <div class="flex items-center justify-between gap-3 mb-2">
