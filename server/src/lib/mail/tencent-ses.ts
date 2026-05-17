@@ -42,13 +42,14 @@ export class TencentSesMailSender implements MailSender {
   }
 
   async send(msg: MailMessage): Promise<void> {
+    // 腾讯云 SES Simple 模式：Text/Html 必须是 base64 编码后的字符串
     await this.client.SendEmail({
       FromEmailAddress: this.from,
       Destination: [msg.to],
       Subject: msg.subject,
       Simple: {
-        Text: msg.text,
-        ...(msg.html ? { Html: msg.html } : {})
+        Text: Buffer.from(msg.text, 'utf-8').toString('base64'),
+        ...(msg.html ? { Html: Buffer.from(msg.html, 'utf-8').toString('base64') } : {})
       }
     });
   }
