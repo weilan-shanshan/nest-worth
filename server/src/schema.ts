@@ -35,3 +35,18 @@ export const rangeSchema = z.enum(['7d', '30d', '90d']).default('30d');
 export function rangeToDays(r: '7d' | '30d' | '90d'): number {
   return r === '7d' ? 7 : r === '90d' ? 90 : 30;
 }
+
+// ===========================================================================
+// 商业化 schemas（Sprint 0）
+// ===========================================================================
+
+export const requestLinkSchema = z.object({
+  email: z.string().email().max(254)
+}).strict();
+
+export const verifyLinkSchema = z.object({
+  token: z.string().min(32).max(128)
+}).strict();
+
+export const SUBSCRIPTION_TIERS = ['free', 'plus', 'pro', 'max', 'studio'] as const;
+export type SubscriptionTier = (typeof SUBSCRIPTION_TIERS)[number];

@@ -6,6 +6,8 @@ import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { track } from './routes/track.js';
 import { admin } from './routes/admin.js';
+import { auth } from './routes/auth.js';
+import { me } from './routes/me.js';
 
 const app = new Hono();
 
@@ -27,13 +29,15 @@ app.use('*', cors({
     return ALLOWED.includes(origin) ? origin : '';
   },
   allowMethods: ['POST', 'GET', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'X-Admin-Token']
+  allowHeaders: ['Content-Type', 'X-Admin-Token', 'Authorization']
 }));
 
-app.get('/', (c) => c.text('nestworth-analytics ok'));
+app.get('/', (c) => c.text('nestworth-server ok'));
 
 app.route('/track', track);
 app.route('/admin', admin);
+app.route('/auth', auth);
+app.route('/me', me);
 
 const port = Number(process.env.PORT || 8787);
 serve({ fetch: app.fetch, port }, () => {

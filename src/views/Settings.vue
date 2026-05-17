@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAppStore } from '../store/assets';
+import { useAccountStore } from '../store/account';
 import { db, updateAnalystConfig, updateSettings } from '../db';
 import { MODEL_CHAIN, ANALYST_CHAIN, resetExhaustedModels, setPreferredModel } from '../lib/recognize';
 import { clearAdviceCache } from '../lib/advisor';
@@ -13,6 +14,28 @@ import type { DeriveMode } from '../types';
 const router = useRouter();
 
 const store = useAppStore();
+const accountStore = useAccountStore();
+
+const TIER_LABEL: Record<string, string> = {
+  free: 'Free',
+  plus: 'Plus',
+  pro: 'Pro',
+  max: 'Max',
+  studio: 'Studio'
+};
+
+const tierLabel = computed(() => TIER_LABEL[accountStore.tier] ?? 'Free');
+const periodEnd = computed(() => {
+  const raw = accountStore.me?.currentPeriodEnd;
+  if (!raw) return null;
+  try { return new Date(raw).toISOString().slice(0, 10); }
+  catch { return null; }
+});
+
+onMounted(() => {
+  // Sprint 0: 仅在已存 JWT 的设备上拉一次状态；无 JWT 时静默不发请求
+  void accountStore.refresh();
+});
 
 const apiKey = ref(store.settings.apiKey || '');
 const showKey = ref(false);
@@ -194,6 +217,37 @@ function toast(msg: string) {
 
     <!-- 安装到主屏（PWA 入口） -->
     <InstallEntryCard />
+
+    <!-- 账号 · Sprint 0 状态卡（登录交互流 Sprint 1 上线） -->
+    <section class="card-base">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="i-ph-user-circle-duotone text-brand text-lg" />
+        <h3 class="font-700 text-[15px]">账号</h3>
+      </div>
+      <div v-if="accountStore.isAuthed" class="flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="text-[13px] font-600">{{ tierLabel }}</div>
+          <div class="text-[11px] text-ink-muted mt-0.5">
+            <span v-if="accountStore.me?.status === 'trialing'">试用中</span>
+            <span v-else>{{ accountStore.me?.status === 'active' ? '订阅中' : accountStore.me?.status }}</span>
+            <span v-if="periodEnd"> · 到期 {{ periodEnd }}</span>
+          </div>
+        </div>
+        <button
+          class="tap text-[11px] text-ink-muted px-2.5 py-1 rounded border border-line"
+          @click="accountStore.signOut()"
+        >
+          退出
+        </button>
+      </div>
+      <div v-else>
+        <div class="text-[13px] font-600">Free · 未登录</div>
+        <div class="text-[11px] text-ink-muted mt-1 leading-relaxed">
+          商业化档位（Plus / Pro / Max / Studio）即将上线；登录后才能使用平台代付的 LLM 配额、复盘 PDF 等服务。
+          账号只存订阅状态，<span class="font-600 text-ink">永不存任何资产数据</span>。
+        </div>
+      </div>
+    </section>
 
     <!-- 使用说明（顶置入口）-->
     <button

@@ -23,6 +23,9 @@ package-lock.json
 # 本地调试样本（API 抓包、截图等，不进版本库）
 data/
 
+# 内部文档（商业化方案、定价策略、内部 SOP，不公开）
+docs/_internal/
+
 # ui-ux-pro-max skill 持久化的草稿 design system（自动生成、需人工编辑后再入库）
 design-system/
 
