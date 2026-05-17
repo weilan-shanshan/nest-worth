@@ -1,6 +1,7 @@
 import type { MailSender } from './types.js';
 import { StubMailSender } from './stub.js';
 import { SmtpMailSender } from './smtp.js';
+import { TencentSesMailSender } from './tencent-ses.js';
 
 export type { MailSender, MailMessage } from './types.js';
 export { buildMagicLinkMail } from './templates.js';
@@ -9,7 +10,8 @@ let instance: MailSender | null = null;
 
 /**
  * 模块单例。第一次调用时按 MAIL_TRANSPORT 选择实现。
- *   - 'smtp'        → SmtpMailSender（依赖 SMTP_* 环境变量）
+ *   - 'tencent_ses' → TencentSesMailSender（HTTP API，个人实名账号也可用）
+ *   - 'smtp'        → SmtpMailSender（依赖 SMTP_* 环境变量，需企业认证）
  *   - 'stub' / unset → StubMailSender（console.log，不真发）
  */
 export function getMailSender(): MailSender {
@@ -17,7 +19,19 @@ export function getMailSender(): MailSender {
 
   const kind = (process.env.MAIL_TRANSPORT || 'stub').toLowerCase();
 
-  if (kind === 'smtp') {
+  if (kind === 'tencent_ses') {
+    const secretId = process.env.TENCENT_SES_SECRET_ID;
+    const secretKey = process.env.TENCENT_SES_SECRET_KEY;
+    const region = process.env.TENCENT_SES_REGION || 'ap-hongkong';
+    const from = process.env.TENCENT_SES_FROM;
+    if (!secretId || !secretKey || !from) {
+      console.error('[mail] MAIL_TRANSPORT=tencent_ses 但 TENCENT_SES_SECRET_ID / TENCENT_SES_SECRET_KEY / TENCENT_SES_FROM 不完整，降级到 stub');
+      instance = new StubMailSender();
+      return instance;
+    }
+    instance = new TencentSesMailSender({ secretId, secretKey, region, fromEmailAddress: from });
+    console.log(`[mail] Tencent SES enabled · region=${region} from=${from}`);
+  } else if (kind === 'smtp') {
     const host = process.env.SMTP_HOST;
     const port = Number(process.env.SMTP_PORT || '465');
     const user = process.env.SMTP_USER;

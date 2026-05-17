@@ -23,6 +23,7 @@
     "jose": "^6.2.3",
     "nodemailer": "^8.0.7",
     "pg": "^8.13.0",
+    "tencentcloud-sdk-nodejs-ses": "^4.1.222",
     "zod": "^3.23.8"
   },
   "devDependencies": {
