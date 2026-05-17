@@ -1,3 +1,6 @@
+// 启动前自动加载同目录 .env（dev / 生产都依赖此行）
+import 'dotenv/config';
+
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
