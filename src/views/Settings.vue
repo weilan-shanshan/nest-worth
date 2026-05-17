@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAppStore } from '../store/assets';
 import { useAccountStore } from '../store/account';
@@ -8,6 +8,7 @@ import { MODEL_CHAIN, ANALYST_CHAIN, resetExhaustedModels, setPreferredModel } f
 import { clearAdviceCache } from '../lib/advisor';
 import InstallEntryCard from '../components/InstallEntryCard.vue';
 import QuotaBar from '../components/QuotaBar.vue';
+import { pickLlmMode } from '../lib/llm-client';
 import { isQuoteProxyConfigured } from '../lib/quotes';
 import { trackCta } from '../lib/analytics';
 import type { DeriveMode } from '../types';
@@ -126,13 +127,32 @@ const orderedAnalysts = computed(() => {
 });
 
 const enabledAnalystCount = computed(() => orderedAnalysts.value.filter(m => m.enabled).length);
+
+// proxy 模式下按 tier 限制 ensembleSize 上限；BYOK / Studio 不限
+const ensembleMaxN = computed(() => {
+  if (pickLlmMode() === 'byok') return 3;
+  const t = accountStore.tier;
+  if (t === 'free' || t === 'plus') return 1;
+  if (t === 'pro') return 2;
+  return 3;
+});
+
 const ensembleSize = computed({
-  get: () => store.settings.ensembleSize || 1,
+  get: () => Math.min(ensembleMaxN.value, store.settings.ensembleSize || 1),
   set: (v) => {
-    updateAnalystConfig({ ensembleSize: v }).then(() => store.refreshSettings());
+    const clamped = Math.max(1, Math.min(ensembleMaxN.value, v));
+    updateAnalystConfig({ ensembleSize: clamped }).then(() => store.refreshSettings());
     clearAdviceCache();   // 配置变了清缓存
   }
 });
+
+// 当切到代付模式 / 退档后，把 IndexedDB 里残留的高档值自动 clamp 回 store
+watch(ensembleMaxN, (mx) => {
+  if ((store.settings.ensembleSize || 1) > mx) {
+    updateAnalystConfig({ ensembleSize: mx }).then(() => store.refreshSettings());
+    clearAdviceCache();
+  }
+}, { immediate: true });
 
 async function toggleAnalyst(name: string, on: boolean) {
   const next = { ...(store.settings.analystEnabled || {}), [name]: on };
@@ -349,11 +369,15 @@ function toast(msg: string) {
         </div>
         <div class="flex gap-1.5">
           <button v-for="n in 3" :key="n"
+                  :disabled="n > ensembleMaxN"
+                  :title="n > ensembleMaxN ? `当前档位最高 N=${ensembleMaxN}，升级解锁` : ''"
                   class="tap flex-1 h-9 rounded-icon text-xs font-700 border transition-all"
-                  :class="ensembleSize === n
-                    ? 'bg-brand text-white border-brand'
-                    : 'bg-card border-border text-ink-muted'"
-                  @click="ensembleSize = n">
+                  :class="n > ensembleMaxN
+                    ? 'bg-line/30 border-line text-ink-muted/40 cursor-not-allowed'
+                    : ensembleSize === n
+                      ? 'bg-brand text-white border-brand'
+                      : 'bg-card border-border text-ink-muted'"
+                  @click="n <= ensembleMaxN && (ensembleSize = n)">
             <div>{{ n === 1 ? '单模型' : n === 2 ? '2 模型' : '3 模型' }}</div>
             <div class="text-[9px] mt-0.5 font-400 opacity-80">
               {{ n === 1 ? '最快 / 1×成本' : n === 2 ? '推荐 / 3×成本' : '严谨 / 4×成本' }}
@@ -362,6 +386,11 @@ function toast(msg: string) {
         </div>
         <div v-if="ensembleSize > 1" class="mt-2 text-[10px] text-ink-muted leading-relaxed">
           ✨ 前 {{ ensembleSize }} 个启用模型并行回答 → 第 {{ ensembleSize + 1 }} 次调用让最强模型综合 → 输出最终方案
+        </div>
+        <!-- proxy 模式且非顶档 → 提示升级路径 -->
+        <div v-if="ensembleMaxN < 3 && accountStore.isAuthed" class="mt-2 text-[10px] text-ink-muted leading-relaxed">
+          <span v-if="ensembleMaxN === 1">当前 {{ tierLabel }} 档仅支持 N=1，升级 <b class="text-brand">Pro</b> 解锁 N=2，<b class="text-brand">Max</b> 解锁 N=3</span>
+          <span v-else>当前 {{ tierLabel }} 档支持 N=1/2，升级 <b class="text-brand">Max</b> 解锁 N=3</span>
         </div>
       </div>
 
