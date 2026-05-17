@@ -136,3 +136,28 @@ export async function consumeOcrQuota(
   if (!r) throw new QuotaExceededError('ocr');
   return { used: r.ocr_used, quota: r.ocr_quota };
 }
+
+/**
+ * 原子扣减 analysis 配额。与 consumeOcrQuota 对称。
+ * 1 次 analyzeAssets/adviseGoal 调用 = 1 个 analysis_used，无论内部跑了 N 个模型。
+ */
+export async function consumeAnalysisQuota(
+  userId: string,
+  amount = 1,
+  client?: PoolClient
+): Promise<{ used: number; quota: number }> {
+  const period = currentPeriodStart();
+  const exec = client ?? pool;
+  const { rows } = await exec.query(
+    `UPDATE quota_snapshots
+        SET analysis_used = analysis_used + $3, updated_at = NOW()
+      WHERE user_id = $1
+        AND period_start = $2::date
+        AND analysis_used + $3 <= analysis_quota
+      RETURNING analysis_used, analysis_quota`,
+    [userId, period, amount]
+  );
+  const r = rows[0];
+  if (!r) throw new QuotaExceededError('analysis');
+  return { used: r.analysis_used, quota: r.analysis_quota };
+}
