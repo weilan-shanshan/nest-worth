@@ -124,11 +124,14 @@ watch(() => store.goals.map(g => g.id).join(','), () => {
               </div>
             </div>
             <div class="text-right">
-              <div class="font-brand text-xl font-600 text-orange">{{ g.pct.toFixed(0) }}%</div>
+              <div class="font-brand text-xl font-600"
+                   :class="g.pct >= 80 ? 'text-brand' : 'text-orange'">{{ g.pct.toFixed(0) }}%</div>
             </div>
           </div>
           <div class="mt-3 h-2 bg-brand/10 rounded-full overflow-hidden">
-            <div class="h-full bg-orange rounded-full transition-all" :style="{ width: g.pct + '%' }" />
+            <div class="h-full rounded-full transition-all"
+                 :class="g.pct >= 80 ? 'bg-brand' : 'bg-orange'"
+                 :style="{ width: g.pct + '%' }" />
           </div>
           <div class="mt-2 flex items-center justify-between text-[11px] text-ink-muted">
             <span>当前 ¥{{ formatMoney(Math.max(g.current, store.totalNetWorth), { decimals: 0 }) }}</span>

@@ -19,6 +19,14 @@ const completedSteps = ref<Set<number>>(new Set());
 
 const returnTo = computed(() => (route.query.from as string) || '/');
 
+// stepper：第一个未完成的步骤即"当前步骤"，全部完成时返回 4
+const currentStep = computed(() => {
+  for (let i = 1; i <= 4; i++) {
+    if (!completedSteps.value.has(i)) return i;
+  }
+  return 4;
+});
+
 function markComplete(n: number) {
   completedSteps.value.add(n);
   completedSteps.value = new Set(completedSteps.value);
@@ -109,6 +117,29 @@ function skipForNow() {
         阿里云百炼新用户每个模型送 100 万 token，够用很久 — <b>完全免费起步</b>。
       </p>
     </section>
+
+    <!-- Sticky 进度 stepper -->
+    <nav class="sticky top-0 z-20 -mx-4 px-4 py-2.5 bg-bg/95 backdrop-blur border-b border-border">
+      <div class="flex items-center justify-between gap-1">
+        <template v-for="(label, i) in ['打开百炼', '开通服务', '复制 Key', '粘贴验证']" :key="label">
+          <div class="flex flex-col items-center gap-1 shrink-0">
+            <div class="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-700 transition-colors"
+                 :class="completedSteps.has(i + 1)
+                   ? 'bg-pos text-white'
+                   : (currentStep === i + 1 ? 'bg-brand text-white shadow-[0_2px_8px_rgba(46,158,96,0.35)]' : 'bg-border text-ink-muted')">
+              <span v-if="completedSteps.has(i + 1)" class="i-ph-check-bold text-sm" />
+              <span v-else>{{ i + 1 }}</span>
+            </div>
+            <span class="text-[9px] font-600 leading-none"
+                  :class="currentStep === i + 1 || completedSteps.has(i + 1) ? 'text-ink' : 'text-ink-muted'">
+              {{ label }}
+            </span>
+          </div>
+          <div v-if="i < 3" class="flex-1 h-0.5 rounded-full -mt-3"
+               :class="completedSteps.has(i + 1) ? 'bg-pos' : 'bg-border'" />
+        </template>
+      </div>
+    </nav>
 
     <!-- Step 1: 打开百炼 -->
     <section class="card-base !p-4">

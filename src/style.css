@@ -50,6 +50,33 @@ input[type=number] {
 .tap { transition: transform 0.12s ease, opacity 0.12s ease; }
 .tap:active { transform: scale(0.97); opacity: 0.85; }
 
+/* Card hover lift — 仅鼠标设备触发，触屏不出现以免覆盖 active */
+@media (hover: hover) and (pointer: fine) {
+  .card-base { transition: transform 0.18s ease, box-shadow 0.18s ease; }
+  .card-base:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(46, 158, 96, 0.08);
+  }
+}
+
+/* Skeleton 占位脉冲 */
+@keyframes nw-skeleton-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.skeleton {
+  background: linear-gradient(90deg,
+    rgba(46,158,96,0.06) 0%,
+    rgba(46,158,96,0.12) 50%,
+    rgba(46,158,96,0.06) 100%);
+  background-size: 200% 100%;
+  animation: nw-skeleton-pulse 1.6s ease-in-out infinite;
+  border-radius: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
 /* Modal animation */
 .fade-enter-active, .fade-leave-active { transition: opacity 0.18s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }

@@ -331,7 +331,7 @@ function toast(msg: string) {
           <button class="tap w-9 h-5 rounded-full transition-colors relative shrink-0"
                   :class="m.enabled ? 'bg-brand' : 'bg-border'"
                   @click="toggleAnalyst(m.name, !m.enabled)">
-            <span class="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform"
+            <span class="absolute top-0.5 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform"
                   :style="{ transform: m.enabled ? 'translateX(18px)' : 'translateX(2px)' }" />
           </button>
         </div>
@@ -487,7 +487,7 @@ function toast(msg: string) {
         :class="store.settings.privacyMode ? 'bg-brand' : 'bg-border'"
         @click="store.setPrivacy(!store.settings.privacyMode)"
       >
-        <span class="absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform"
+        <span class="absolute top-0.5 left-0 w-6 h-6 bg-white rounded-full shadow transition-transform"
               :style="{ transform: store.settings.privacyMode ? 'translateX(22px)' : 'translateX(2px)' }" />
       </button>
     </section>
@@ -506,7 +506,7 @@ function toast(msg: string) {
         :class="store.settings.analyticsEnabled !== false ? 'bg-brand' : 'bg-border'"
         @click="store.setAnalyticsEnabled(store.settings.analyticsEnabled === false)"
       >
-        <span class="absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform"
+        <span class="absolute top-0.5 left-0 w-6 h-6 bg-white rounded-full shadow transition-transform"
               :style="{ transform: store.settings.analyticsEnabled !== false ? 'translateX(22px)' : 'translateX(2px)' }" />
       </button>
     </section>

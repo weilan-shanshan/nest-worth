@@ -180,7 +180,8 @@ function maskOrShow(text: string) {
         <button class="tap bg-bg/70 rounded-icon px-2.5 py-2 text-left" @click="router.push('/goals')">
           <div class="text-[10px] text-ink-muted font-600">距目标</div>
           <template v-if="goalGap">
-            <div class="font-brand font-600 text-[14px] mt-0.5 text-orange">
+            <div class="font-brand font-600 text-[14px] mt-0.5"
+                 :class="goalGap.pct >= 80 ? 'text-brand' : 'text-orange'">
               {{ goalGap.pct.toFixed(0) }}%
             </div>
             <div class="text-[10px] font-600 text-ink-muted truncate">

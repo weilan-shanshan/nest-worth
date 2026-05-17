@@ -100,6 +100,6 @@ export default defineConfig({
     'i-ph-desktop-duotone', 'i-ph-copy-duotone', 'i-ph-check-bold',
     'i-ph-list-numbers-duotone', 'i-ph-images-square-duotone',
     'i-ph-arrows-merge-duotone', 'i-ph-currency-circle-dollar-duotone',
-    'i-ph-link-duotone'
+    'i-ph-link-duotone', 'i-ph-coin-vertical-duotone', 'i-ph-chart-bar-duotone'
   ]
 });

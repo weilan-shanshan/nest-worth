@@ -43,26 +43,27 @@ function goSetup() {
       </button>
     </div>
 
-    <!-- 优先级最高：未配置 Key 的强引导 CTA（盖过 loading/error/empty）-->
-    <div v-if="!store.hasApiKey" class="rounded-icon bg-gradient-to-br from-orange/15 to-orange/5 border border-orange/30 p-3.5 mt-1">
-      <div class="flex items-center gap-2 mb-2">
-        <span class="i-ph-rocket-launch-duotone text-orange text-lg" />
-        <span class="font-700 text-[13px] text-ink">解锁 AI 顾问 · 5 分钟搞定</span>
-      </div>
-      <p class="text-[11px] text-ink-muted leading-relaxed mb-3">
-        本卡片需要 AI 模型生成。阿里云百炼新用户每个模型送 100 万 token 免费额度，
-        约够 <b>{{ title.includes('持仓') ? '500+ 次持仓分析' : '300+ 次目标方案生成' }}</b>。
-      </p>
-      <button class="tap w-full h-10 rounded-icon bg-orange text-white font-700 text-sm flex items-center justify-center gap-1.5"
-              @click="goSetup">
-        <span class="i-ph-arrow-circle-right-duotone text-base" />
-        立即配置（带保姆级引导）
-      </button>
-    </div>
+    <!-- 未配 Key：一行轻提示（Home 已有大 banner，此处不重复）-->
+    <button v-if="!store.hasApiKey"
+            class="tap mt-1 w-full px-3 py-2.5 rounded-icon bg-orange/8 border border-orange/20 flex items-center gap-2 text-left"
+            @click="goSetup">
+      <span class="i-ph-rocket-launch-duotone text-orange text-base shrink-0" />
+      <span class="flex-1 min-w-0 text-[12px] text-ink leading-snug">
+        <b class="text-orange">配置 AI Key</b> 后此处会显示 AI 分析
+      </span>
+      <span class="i-ph-caret-right-bold text-orange text-xs shrink-0" />
+    </button>
 
-    <div v-else-if="loading" class="text-[12px] text-ink-muted py-2 flex items-center gap-2">
-      <span class="i-ph-sparkle-duotone text-brand text-base animate-pulse" />
-      AI 分析中…（首次约 5-15 秒，结果会缓存 24h）
+    <div v-else-if="loading" class="flex flex-col gap-2.5 mt-1">
+      <div class="flex items-center gap-2 text-[11px] text-ink-muted">
+        <span class="i-ph-sparkle-duotone text-brand text-sm animate-pulse" />
+        AI 分析中…（首次 5-15 秒，结果会缓存 24h）
+      </div>
+      <div class="skeleton h-3.5 w-[85%]" />
+      <div class="skeleton h-3.5 w-[70%]" />
+      <div class="skeleton h-3.5 w-[92%]" />
+      <div class="skeleton h-3.5 w-[60%]" />
+      <div class="skeleton h-16 w-full mt-1" />
     </div>
 
     <div v-else-if="error" class="text-[12px] text-neg bg-neg/10 px-3 py-2 rounded-icon leading-relaxed">
