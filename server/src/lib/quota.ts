@@ -54,6 +54,38 @@ export async function ensureCurrentPeriodQuota(
   );
 }
 
+/**
+ * tier 变化（admin 升档 / 降档）时同步当月 quota 上限。
+ *
+ * 行为：
+ *   - quota 上限直接覆盖为新 tier 的值
+ *   - used 计数保留不变（已用就是已用，不退）
+ *   - 若 used > 新 quota（降档场景），用户当月剩余 = 0 但不"倒扣"
+ *
+ * 跟 ensureCurrentPeriodQuota 区别：本函数会 UPDATE 已存在行；前者只 INSERT。
+ *
+ * 注：跨月度的退档 / 升档时按比例退款是商业策略，跟本函数无关。
+ */
+export async function recomputeCurrentPeriodQuota(
+  userId: string,
+  tier: SubscriptionTier,
+  client?: PoolClient
+): Promise<void> {
+  const period = currentPeriodStart();
+  const q = tierToQuota(tier, false);   // 不再给 first month bonus（防止月内被反复刷出额度）
+  const exec = client ?? pool;
+
+  await exec.query(
+    `INSERT INTO quota_snapshots (user_id, period_start, ocr_quota, analysis_quota)
+       VALUES ($1, $2::date, $3, $4)
+     ON CONFLICT (user_id, period_start) DO UPDATE
+       SET ocr_quota      = EXCLUDED.ocr_quota,
+           analysis_quota = EXCLUDED.analysis_quota,
+           updated_at     = NOW()`,
+    [userId, period, q.ocr, q.analysis]
+  );
+}
+
 // ===========================================================================
 // 读 / 扣减
 // ===========================================================================

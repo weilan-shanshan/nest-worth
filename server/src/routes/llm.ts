@@ -148,7 +148,13 @@ llm.post('/analysis', async (c) => {
   }
 
   // 2. 跑 orchestrator
-  const tier = (SUBSCRIPTION_TIERS as readonly string[]).includes(session.tier) ? session.tier : 'free';
+  // 不能信 JWT 里的 tier（admin 升档后旧 JWT 仍是老值），实时从 DB 拉
+  const { rows: tierRows } = await pool.query(
+    `SELECT subscription_tier FROM users WHERE id = $1`,
+    [session.userId]
+  );
+  const dbTier = tierRows[0]?.subscription_tier;
+  const tier = (SUBSCRIPTION_TIERS as readonly string[]).includes(dbTier) ? dbTier : 'free';
   let result;
   try {
     result = await runAnalysis({

@@ -50,3 +50,27 @@ export const verifyLinkSchema = z.object({
 
 export const SUBSCRIPTION_TIERS = ['free', 'plus', 'pro', 'max', 'studio'] as const;
 export type SubscriptionTier = (typeof SUBSCRIPTION_TIERS)[number];
+
+export const SUBSCRIPTION_STATUSES = ['active', 'trialing', 'cancelled', 'expired', 'past_due'] as const;
+export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
+
+/**
+ * admin 手动升档 / 改状态 schema。
+ * 与商业化支付通道未接通的过渡期内，作者收款后用 admin token 触发该接口。
+ *
+ * 字段语义：
+ *   - email：必填，目标用户邮箱（HMAC 哈希后查 users 表）
+ *   - tier：目标档位（free/plus/pro/max/studio）
+ *   - status：可选，默认 'active'
+ *   - periodEnd：可选，订阅到期日。null = 清除；未传 = 保留现值；ISO 8601 datetime
+ *   - trialEndsAt：可选，试用结束时间，规则同上
+ *   - createIfMissing：可选，目标 email 不存在时是否自动创建用户；默认 false
+ */
+export const grantTierSchema = z.object({
+  email: z.string().email().max(254),
+  tier: z.enum(SUBSCRIPTION_TIERS),
+  status: z.enum(SUBSCRIPTION_STATUSES).default('active'),
+  periodEnd: z.union([z.string().datetime(), z.null()]).optional(),
+  trialEndsAt: z.union([z.string().datetime(), z.null()]).optional(),
+  createIfMissing: z.boolean().default(false)
+}).strict();

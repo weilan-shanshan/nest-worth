@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { pool } from '../db.js';
-import { rangeSchema, rangeToDays } from '../schema.js';
+import { rangeSchema, rangeToDays, grantTierSchema } from '../schema.js';
+import { hashEmail } from '../lib/hash.js';
+import { recomputeCurrentPeriodQuota } from '../lib/quota.js';
 
 export const admin = new Hono();
 
@@ -160,4 +162,108 @@ admin.get('/retention', async (c) => {
       };
     })
   });
+});
+
+/**
+ * POST /admin/grant-tier
+ *
+ * 商业化过渡期：自动支付通道未上前，作者收到打款 / 转账后用 admin token 调本
+ * 接口给指定 email 升档。也用于内部测试、客服退款、试用激活等。
+ *
+ * 鉴权：复用上方 admin.use('*') 的 X-Admin-Token 中间件。
+ *
+ * 行为（事务内）：
+ *   1. 按 email_hash 查 users
+ *   2. 不存在：createIfMissing=true 则插入 free 用户；否则 404
+ *   3. UPDATE tier / status / current_period_end / trial_ends_at / updated_at
+ *   4. recomputeCurrentPeriodQuota 同步当月配额上限（保留 used）
+ *
+ * 操作日志打到 server log（Sprint 3 不入 DB，admin_actions 表 Sprint 4 加）
+ */
+admin.post('/grant-tier', async (c) => {
+  let raw: unknown;
+  try { raw = await c.req.json(); }
+  catch { return c.json({ error: 'bad_payload' }, 400); }
+
+  const parsed = grantTierSchema.safeParse(raw);
+  if (!parsed.success) {
+    return c.json({ error: 'invalid_input', detail: parsed.error.issues[0]?.message }, 400);
+  }
+  const p = parsed.data;
+  const emailHash = hashEmail(p.email);
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: existing } = await client.query(
+      `SELECT id, subscription_tier, subscription_status FROM users WHERE email_hash = $1 FOR UPDATE`,
+      [emailHash]
+    );
+
+    let userId: string;
+    let previousTier: string | null = null;
+    let previousStatus: string | null = null;
+
+    if (existing[0]) {
+      userId = existing[0].id;
+      previousTier = existing[0].subscription_tier;
+      previousStatus = existing[0].subscription_status;
+    } else {
+      if (!p.createIfMissing) {
+        await client.query('ROLLBACK');
+        return c.json({ error: 'user_not_found', email_hash_prefix: emailHash.slice(0, 8) }, 404);
+      }
+      const { rows: created } = await client.query(
+        `INSERT INTO users (email_hash) VALUES ($1) RETURNING id`,
+        [emailHash]
+      );
+      userId = created[0].id;
+    }
+
+    // 动态拼 UPDATE：periodEnd / trialEndsAt undefined 表示「保留」；null 表示「清空」
+    const sets: string[] = ['subscription_tier = $2', 'subscription_status = $3', 'updated_at = NOW()'];
+    const params: any[] = [userId, p.tier, p.status];
+    if (p.periodEnd !== undefined) {
+      params.push(p.periodEnd);
+      sets.push(`current_period_end = $${params.length}`);
+    }
+    if (p.trialEndsAt !== undefined) {
+      params.push(p.trialEndsAt);
+      sets.push(`trial_ends_at = $${params.length}`);
+    }
+    const { rows: updated } = await client.query(
+      `UPDATE users SET ${sets.join(', ')} WHERE id = $1
+       RETURNING id, subscription_tier, subscription_status, current_period_end, trial_ends_at`,
+      params
+    );
+
+    await recomputeCurrentPeriodQuota(userId, p.tier, client);
+
+    await client.query('COMMIT');
+
+    console.log('[admin.grant-tier] ok', {
+      userId,
+      previousTier, previousStatus,
+      newTier: p.tier, newStatus: p.status,
+      ts: new Date().toISOString()
+    });
+
+    const u = updated[0];
+    return c.json({
+      userId: u.id,
+      previousTier,
+      previousStatus,
+      tier: u.subscription_tier,
+      status: u.subscription_status,
+      currentPeriodEnd: u.current_period_end,
+      trialEndsAt: u.trial_ends_at
+    });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[admin.grant-tier] failed', e);
+    return c.json({ error: 'server_error' }, 500);
+  } finally {
+    client.release();
+  }
 });
