@@ -8,6 +8,8 @@ import { track } from './routes/track.js';
 import { admin } from './routes/admin.js';
 import { auth } from './routes/auth.js';
 import { me } from './routes/me.js';
+import { llm } from './routes/llm.js';
+import { quota } from './routes/quota.js';
 
 const app = new Hono();
 
@@ -38,6 +40,8 @@ app.route('/track', track);
 app.route('/admin', admin);
 app.route('/auth', auth);
 app.route('/me', me);
+app.route('/llm', llm);
+app.route('/quota', quota);
 
 const port = Number(process.env.PORT || 8787);
 serve({ fetch: app.fetch, port }, () => {

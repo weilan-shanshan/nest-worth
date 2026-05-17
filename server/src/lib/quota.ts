@@ -53,3 +53,86 @@ export async function ensureCurrentPeriodQuota(
     [userId, period, q.ocr, q.analysis]
   );
 }
+
+// ===========================================================================
+// 读 / 扣减
+// ===========================================================================
+
+export interface QuotaSnapshot {
+  periodStart: string;            // ISO date
+  ocr: { quota: number; used: number };
+  analysis: { quota: number; used: number };
+}
+
+/**
+ * 把 pg 返回的 DATE（JS Date 本地午夜）格式化为 YMD，避免 toISOString 在
+ * CST 等东半球时区把日期回退一天。
+ */
+function fmtPeriodDate(d: Date | string): string {
+  if (typeof d === 'string') return d.slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * 读当月配额。若 snapshot 不存在返回 null（理论上不会，因为 verify 时已 ensure）。
+ */
+export async function readCurrentQuota(userId: string): Promise<QuotaSnapshot | null> {
+  const period = currentPeriodStart();
+  const { rows } = await pool.query(
+    `SELECT period_start, ocr_quota, analysis_quota, ocr_used, analysis_used
+       FROM quota_snapshots
+      WHERE user_id = $1 AND period_start = $2::date`,
+    [userId, period]
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    periodStart: fmtPeriodDate(r.period_start),
+    ocr:      { quota: r.ocr_quota,      used: r.ocr_used },
+    analysis: { quota: r.analysis_quota, used: r.analysis_used }
+  };
+}
+
+export class QuotaExceededError extends Error {
+  constructor(public kind: 'ocr' | 'analysis') {
+    super(`${kind}_quota_exceeded`);
+  }
+}
+
+/**
+ * 原子扣减 OCR 配额（+amount）。
+ * 用条件 UPDATE：仅在 used + amount <= quota 时增加，否则 0 行返回。
+ * 0 行 → 配额不足，抛 QuotaExceededError。
+ *
+ * 调用顺序建议（避免 LLM 失败仍扣额度）：
+ *   1) readCurrentQuota 做软预检（前端体验用）
+ *   2) 调 Bailian OCR
+ *   3) Bailian 成功后调本函数 + 写 usage_events（同一事务）
+ *   4) Bailian 失败：直接抛错，无任何 DB 写入
+ *
+ * 极端并发下 step 2 可能未通过 step 4 的扣减而消耗 API 余额；Sprint 1 暂不做
+ * 串行锁，靠 step 1 软预检 + 后期 Sprint 2 的 rate limit 兜底。
+ */
+export async function consumeOcrQuota(
+  userId: string,
+  amount = 1,
+  client?: PoolClient
+): Promise<{ used: number; quota: number }> {
+  const period = currentPeriodStart();
+  const exec = client ?? pool;
+  const { rows } = await exec.query(
+    `UPDATE quota_snapshots
+        SET ocr_used = ocr_used + $3, updated_at = NOW()
+      WHERE user_id = $1
+        AND period_start = $2::date
+        AND ocr_used + $3 <= ocr_quota
+      RETURNING ocr_used, ocr_quota`,
+    [userId, period, amount]
+  );
+  const r = rows[0];
+  if (!r) throw new QuotaExceededError('ocr');
+  return { used: r.ocr_used, quota: r.ocr_quota };
+}
