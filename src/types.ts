@@ -52,6 +52,12 @@ export interface Asset {
   interestRate?: number;      // 年化利率 %，如 3.5
   startDate?: string;         // 起息日 / 买入日 YYYY-MM-DD
   maturityDate?: string;      // 到期日 YYYY-MM-DD
+  /**
+   * 受让大额存单/转让理财时，用户已经为接手者支付的"已计利息"。
+   * 计算到期收益时需要扣除：maturityProfit = maturityValue - balance - transferredInterest
+   * 直接持有从起息日开始的存款不需要填。
+   */
+  transferredInterest?: number;
 
   // 截图识别带回的"App 显示值"，仅作为 LLM 计算的参考输入，UI 不直接展示。
   // @deprecated 不要在 UI 里读这两个字段；改读 derived。

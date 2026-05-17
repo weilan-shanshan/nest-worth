@@ -22,16 +22,24 @@ const CACHE_TTL = 24 * 60 * 60 * 1000;
 const SYSTEM = `你是金融资产派生字段计算器。给定一组资产的"基础事实字段"，输出每条资产的派生字段。
 
 ## 派生字段（按 category 取舍，无法算就省略字段）
-- daysToMaturity: 距到期天数（仅 deposit/wealth；今天为 today，已到期为 0）
-- maturityValue: 到期金额（balance + 利息），按单利公式：balance * (1 + interestRate% * termYears)
-- maturityProfit: 到期收益 = maturityValue - balance
+- daysToMaturity: 距到期天数（仅有 maturityDate 的 deposit/wealth；今天为 today，已到期为 0）
+- maturityValue: 到期金额（本金 + 总利息），按单利公式：balance * (1 + interestRate% * termYears)；termYears = termMonths/12 或 (maturityDate - startDate)/365
+- maturityProfit: 用户视角的到期净收益 = maturityValue - balance - (transferredInterest ?? 0)
+   * 普通定期/直接持有：transferredInterest 为 0，等价于 maturityValue - balance
+   * 受让大额存单：必须减去 transferredInterest，因为这部分利息是用户掏钱给原持有人的"成本"
 - holdingDays: 持有天数 = today - startDate（若无 startDate 用 createdAt 的日期）
-- fundReturnAbs: 基金累计收益金额 = balance - cost
-- fundReturnPct: 基金累计收益率 % = (balance - cost) / cost * 100
+- fundReturnAbs: 累计收益金额 = balance - cost
+   * fund 类：直接 balance - cost
+   * wealth 开放式（无 termMonths/interestRate，但有 cost）：同 fund，balance - cost
+- fundReturnPct: 累计收益率 % = (balance - cost) / cost * 100
 - annualized: 年化收益率 %
-   * deposit/wealth: 直接用 interestRate
-   * fund: 简易年化 = fundReturnPct * 365 / max(holdingDays, 1)（若 holdingDays<30，可直接用 fundReturnPct 不年化）
+   * deposit/wealth 定期型（有 interestRate）: 直接用 interestRate
+   * fund / wealth 开放式（有 cost + holdingDays）: fundReturnPct * 365 / max(holdingDays, 1)；若 holdingDays<7 数字会被放大失真，可直接省略 annualized
 - pnlAbs / pnlPct: 通用浮盈金额/率 = balance - cost / pct（仅 stock/realestate 有 cost 时算）
+
+## wealth 双形态判定
+- "定期型 wealth"：有 termMonths 或 (interestRate + startDate)。按 deposit 公式算到期收益。
+- "开放式 wealth"：缺 termMonths 与 interestRate，但有 cost 和 startDate/holdingDays。按 fund 公式算（fundReturnAbs / annualized）。不输出 daysToMaturity / maturityValue / maturityProfit。
 
 ## 输出严格 JSON（不要 markdown 代码块）：
 {"items": [{"id": <number>, "derived": {...}}, ...]}
@@ -54,6 +62,7 @@ interface BasicsInput {
   termMonths?: number;
   startDate?: string;
   maturityDate?: string;
+  transferredInterest?: number;
   shares?: number;
   createdAt: number;
 }
@@ -69,6 +78,7 @@ function pickBasics(a: Asset): BasicsInput {
     termMonths: a.termMonths,
     startDate: a.startDate,
     maturityDate: a.maturityDate,
+    transferredInterest: a.transferredInterest,
     shares: a.shares,
     createdAt: a.createdAt
   };
@@ -82,7 +92,14 @@ export function getMissingBasics(a: Asset): string[] {
   const missing: string[] = [];
   switch (a.category) {
     case 'deposit':
+      if (!a.interestRate) missing.push('interestRate');
+      if (!a.startDate) missing.push('startDate');
+      if (!a.termMonths && !a.maturityDate) missing.push('termMonths');
+      break;
     case 'wealth':
+      // 开放式理财（有 cost + startDate，无 termMonths/interestRate）按基金式派生，OK
+      if (a.cost !== undefined && a.startDate) break;
+      // 定期型理财：要求三件套
       if (!a.interestRate) missing.push('interestRate');
       if (!a.startDate) missing.push('startDate');
       if (!a.termMonths && !a.maturityDate) missing.push('termMonths');
@@ -109,7 +126,7 @@ export function getMissingBasics(a: Asset): string[] {
 /** 整批的指纹：用于 24h 缓存命中判断 */
 function fingerprintBatch(assets: BasicsInput[]): string {
   return assets
-    .map(a => `${a.id}:${a.category}:${a.balance.toFixed(2)}:${a.cost ?? '_'}:${a.interestRate ?? '_'}:${a.termMonths ?? '_'}:${a.startDate ?? '_'}:${a.maturityDate ?? '_'}:${a.shares ?? '_'}`)
+    .map(a => `${a.id}:${a.category}:${a.balance.toFixed(2)}:${a.cost ?? '_'}:${a.interestRate ?? '_'}:${a.termMonths ?? '_'}:${a.startDate ?? '_'}:${a.maturityDate ?? '_'}:${a.transferredInterest ?? '_'}:${a.shares ?? '_'}`)
     .sort()
     .join('|');
 }
@@ -148,6 +165,7 @@ function buildPrompt(items: BasicsInput[]): string {
     if (a.termMonths !== undefined) fields.push(`termMonths=${a.termMonths}`);
     if (a.startDate) fields.push(`startDate=${a.startDate}`);
     if (a.maturityDate) fields.push(`maturityDate=${a.maturityDate}`);
+    if (a.transferredInterest !== undefined) fields.push(`transferredInterest=${a.transferredInterest}`);
     if (a.shares !== undefined) fields.push(`shares=${a.shares}`);
     fields.push(`createdAt=${new Date(a.createdAt).toISOString().slice(0, 10)}`);
     return `- ${fields.join(' ')}`;
@@ -158,7 +176,14 @@ function buildPrompt(items: BasicsInput[]): string {
 /** asset-calc 兜底：当 LLM 失败或字段不足时用确定性公式补全可算的字段 */
 function deriveFallback(a: Asset): AssetDerived {
   const d: AssetDerived = {};
-  if (a.category === 'deposit' || a.category === 'wealth') {
+  const isOpenWealth =
+    a.category === 'wealth' &&
+    a.cost !== undefined &&
+    !a.termMonths &&
+    !a.interestRate;
+
+  if ((a.category === 'deposit' || a.category === 'wealth') && !isOpenWealth) {
+    // 定期型：固收三件套或维度齐全
     const days = fallback.daysToMaturity(a);
     if (days !== null) d.daysToMaturity = days;
     const v = fallback.computeMaturityValue(a);
@@ -166,11 +191,16 @@ function deriveFallback(a: Asset): AssetDerived {
     const p = fallback.computeMaturityProfit(a);
     if (p !== null) d.maturityProfit = round2(p);
     if (a.interestRate !== undefined) d.annualized = a.interestRate;
-  } else if (a.category === 'fund') {
+  } else if (a.category === 'fund' || isOpenWealth) {
+    // 基金 / 开放式 wealth：累计收益 + 年化
     const r = fallback.fundReturnAbs(a);
     if (r !== null) d.fundReturnAbs = round2(r);
     const p = fallback.fundReturnPct(a);
     if (p !== null) d.fundReturnPct = round2(p);
+    const h = fallback.holdingDays(a);
+    if (p !== null && h !== null && h >= 7) {
+      d.annualized = round2((p * 365) / h);
+    }
   } else if (a.category === 'stock' || a.category === 'realestate') {
     if (a.cost !== undefined) {
       d.pnlAbs = round2(a.balance - a.cost);

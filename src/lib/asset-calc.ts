@@ -30,11 +30,11 @@ export function computeMaturityValue(a: Asset): number | null {
   return a.balance * (1 + (a.interestRate * years) / 100);
 }
 
-/** 到期收益 = 到期金额 - 当前本金 */
+/** 到期净收益 = 到期金额 - 本金 - 已支付的受让利息（受让大额存单/转让理财场景） */
 export function computeMaturityProfit(a: Asset): number | null {
   const v = computeMaturityValue(a);
   if (v === null) return null;
-  return v - a.balance;
+  return v - a.balance - (a.transferredInterest || 0);
 }
 
 /** 基金累计收益百分比 */

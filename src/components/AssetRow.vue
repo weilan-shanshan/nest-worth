@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import type { Asset } from '../types';
 import { CATEGORY_MAP } from '../lib/asset-meta';
 import { formatCompact, formatPct } from '../lib/format';
+import { useAppStore } from '../store/assets';
 
 const props = defineProps<{ asset: Asset; privacyMode?: boolean }>();
 const emit = defineEmits<{
@@ -10,14 +11,28 @@ const emit = defineEmits<{
   (e: 'supplement'): void;
 }>();
 
+const store = useAppStore();
 const meta = computed(() => CATEGORY_MAP[props.asset.category]);
+
+/**
+ * 是否处于"派生字段计算中"。判定条件：
+ *   1. 全局正在跑 recomputeDerived（store.deriving.running）
+ *   2. 该资产本身需要派生字段（deposit/wealth/fund/stock/realestate）
+ *   3. 派生还没算出来（!derived 或 derived 是空对象）
+ *   4. 不是因为缺基础字段而被跳过（那种情况会走 missingFields chip）
+ */
+const isCalculating = computed(() => {
+  if (!store.deriving.running) return false;
+  const a = props.asset;
+  const needsDerive = ['deposit', 'wealth', 'fund', 'stock', 'realestate'].includes(a.category);
+  if (!needsDerive) return false;
+  if (a.missingFields && a.missingFields.length) return false;
+  const d = a.derived;
+  return !d || Object.keys(d).length === 0;
+});
 
 function mask(s: string) {
   return props.privacyMode ? s.replace(/[\d.,]/g, '•') : s;
-}
-
-function termText(months: number) {
-  return months >= 12 && months % 12 === 0 ? `${months / 12}年期` : `${months}月期`;
 }
 
 function holdingText(days: number) {
@@ -58,41 +73,56 @@ const display = computed<Display>(() => {
   let rightEmphasis: 'pos' | 'neg' | 'orange' | undefined;
 
   if (a.category === 'deposit' || a.category === 'wealth') {
-    if (a.termMonths) leftSegs.push({ text: termText(a.termMonths) });
-    if (d.annualized !== undefined) leftSegs.push({ text: `${d.annualized}%` });
-    else if (a.interestRate) leftSegs.push({ text: `${a.interestRate}%` });
-    if (d.daysToMaturity !== undefined) {
-      leftSegs.push({
-        text: d.daysToMaturity === 0 ? '已到期' : `还剩 ${d.daysToMaturity} 天`,
-        emphasis: d.daysToMaturity <= 30 ? 'orange' : undefined
-      });
-    }
-    if (d.maturityProfit && d.maturityProfit > 0) {
-      rightText = `+¥${mask(formatCompact(d.maturityProfit))}`;
-      rightEmphasis = 'pos';
+    const isOpenWealth = a.category === 'wealth' && !a.termMonths && !a.interestRate;
+    if (isOpenWealth) {
+      // 开放式理财：基金风格副行
+      if (d.annualized !== undefined) leftSegs.push({ text: `年化 ${formatPct(d.annualized, 1)}` });
+      if (d.holdingDays !== undefined && d.holdingDays > 0) leftSegs.push({ text: holdingText(d.holdingDays) });
+      if (d.fundReturnAbs !== undefined && Math.abs(d.fundReturnAbs) > 0.01) {
+        rightText = `总${d.fundReturnAbs >= 0 ? '+' : '-'}¥${mask(formatCompact(Math.abs(d.fundReturnAbs)))}`;
+        rightEmphasis = d.fundReturnAbs >= 0 ? 'pos' : 'neg';
+      }
+    } else {
+      // 定期型：标题已含"X 年期"，副行不重复
+      if (d.annualized !== undefined) leftSegs.push({ text: `${d.annualized}%` });
+      else if (a.interestRate) leftSegs.push({ text: `${a.interestRate}%` });
+      // 定期存款一定有到期；理财仅在识别到 maturityDate（限制赎回日期）时才显示
+      const showDays = a.category === 'deposit' || !!a.maturityDate;
+      if (showDays && d.daysToMaturity !== undefined) {
+        leftSegs.push({
+          text: d.daysToMaturity === 0 ? '已到期' : `剩 ${d.daysToMaturity} 天`,
+          emphasis: d.daysToMaturity <= 30 ? 'orange' : undefined
+        });
+      }
+      if (d.maturityProfit && d.maturityProfit > 0) {
+        rightText = `总+¥${mask(formatCompact(d.maturityProfit))}`;
+        rightEmphasis = 'pos';
+      }
     }
   } else if (a.category === 'fund') {
-    if (d.fundReturnAbs !== undefined && Math.abs(d.fundReturnAbs) > 0.01) {
-      leftSegs.push({ text: `${d.fundReturnAbs >= 0 ? '+' : '-'}¥${mask(formatCompact(Math.abs(d.fundReturnAbs)))}` });
-    }
     if (d.annualized !== undefined) {
       leftSegs.push({ text: `年化 ${formatPct(d.annualized, 1)}` });
     }
     if (d.holdingDays !== undefined && d.holdingDays > 0) leftSegs.push({ text: holdingText(d.holdingDays) });
 
-    const today = a.dailyChangePct;
-    if (today !== undefined && today !== 0) {
-      rightText = `今 ${formatPct(today, 2)}`;
-      rightEmphasis = today > 0 ? 'pos' : 'neg';
+    if (d.fundReturnAbs !== undefined && Math.abs(d.fundReturnAbs) > 0.01) {
+      rightText = `总${d.fundReturnAbs >= 0 ? '+' : '-'}¥${mask(formatCompact(Math.abs(d.fundReturnAbs)))}`;
+      rightEmphasis = d.fundReturnAbs >= 0 ? 'pos' : 'neg';
+    } else if (a.dailyChange !== undefined && a.dailyChange !== 0) {
+      // 没成本无法算总收益时，回落到今日变动
+      rightText = `今${a.dailyChange > 0 ? '+' : '-'}¥${mask(formatCompact(Math.abs(a.dailyChange)))}`;
+      rightEmphasis = a.dailyChange > 0 ? 'pos' : 'neg';
     }
   } else if (a.category === 'stock') {
     if (d.pnlPct !== undefined) {
       leftSegs.push({ text: `浮盈 ${formatPct(d.pnlPct, 2)}` });
     }
-    const today = a.dailyChangePct;
-    if (today !== undefined && today !== 0) {
-      rightText = `今 ${formatPct(today, 2)}`;
-      rightEmphasis = today > 0 ? 'pos' : 'neg';
+    if (d.pnlAbs !== undefined && Math.abs(d.pnlAbs) > 0.01) {
+      rightText = `总${d.pnlAbs >= 0 ? '+' : '-'}¥${mask(formatCompact(Math.abs(d.pnlAbs)))}`;
+      rightEmphasis = d.pnlAbs >= 0 ? 'pos' : 'neg';
+    } else if (a.dailyChange !== undefined && a.dailyChange !== 0) {
+      rightText = `今${a.dailyChange > 0 ? '+' : '-'}¥${mask(formatCompact(Math.abs(a.dailyChange)))}`;
+      rightEmphasis = a.dailyChange > 0 ? 'pos' : 'neg';
     }
   } else if (a.category === 'realestate') {
     if (a.platform) leftSegs.push({ text: a.platform });
@@ -148,8 +178,15 @@ function onSupplement(e: MouseEvent) {
 
     <!-- 副行 -->
     <div class="flex items-center gap-2 min-h-[14px]">
+      <!-- 计算中：派生字段尚未生成 -->
+      <template v-if="isCalculating">
+        <span class="inline-flex items-center gap-1 text-[11px] text-ink-muted">
+          <span class="i-ph-spinner-gap-bold animate-spin text-[12px]" />
+          计算中…
+        </span>
+      </template>
       <!-- 缺基础字段：显示橙色补充信息 chip（替换正常副行内容） -->
-      <template v-if="missingLabels.length">
+      <template v-else-if="missingLabels.length">
         <span
           class="inline-flex items-center gap-1 px-1.5 h-5 rounded-full bg-orange/15 text-orange text-[10px] font-700"
           @click="onSupplement"

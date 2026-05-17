@@ -20,6 +20,8 @@ export interface RecognizedAsset {
   interestRate?: number;
   startDate?: string;
   maturityDate?: string;
+  transferredInterest?: number;   // 受让大额存单时已支付的利息
+  holdingDays?: number;           // 截图明确写"您已持有 N 天"时填
   // 基金类
   annualizedReturn?: number;
   totalReturn?: number;
@@ -98,13 +100,19 @@ const SYSTEM_PROMPT = `你是一个金融资产识别助手。用户会上传一
 - tickerSymbol: 行情代码（基金/股票适用）：A 股 6 位 / 港股 5 位 / 美股字母 / 基金 6 位
 - tickerType: 与 tickerSymbol 对应：cn-stock | hk-stock | us-stock | cn-fund
 - shares: 持仓数量（股 / 份）
-- termMonths: 期限（月），定期存款/理财用，如 12 / 36
-- interestRate: 年化利率 %（数字），如 3.5（不带 % 符号）
+- termMonths: 期限（月），定期存款用，如 12 / 36；开放式理财（无固定期限的"半年宝/活期理财"等）不填
+- interestRate: 年化利率 %（数字），如 3.5（不带 % 符号）。开放式/净值型理财通常无固定利率，不填
 - startDate: 起息日，格式 YYYY-MM-DD
 - maturityDate: 到期日，格式 YYYY-MM-DD
+- transferredInterest: 受让大额存单/转让理财时已支付的"已受让利息 / 已付受让利息"，纯数字（如 15066.39）
+- holdingDays: 截图明确显示"您已持有 N 天"时直接填整数（如 10）；不要从日期反算
 - annualizedReturn: 基金年化收益率 %
 - totalReturn: 基金累计收益金额（CNY）
 - note: 任何额外说明（可选）
+
+特别注意：
+- 大额存单"转让/受让"页签里会出现「已付受让利息 / 已支付受让利息 / 已收受让利息」金额，必须填到 transferredInterest，不要塞进 cost 或 balance
+- 开放式理财（如"半年宝/财富竹/天天理财"等带"持仓收益/持有收益率"且无固定到期日的产品）属于 wealth，但通常没有 termMonths/interestRate/startDate，只有 cost（持仓成本）和 holdingDays（已持有 N 天）。这种情况下后三者全部留空
 
 严格只输出 JSON，结构：{"items": [<RecognizedAsset>, ...]}。
 不要 markdown 代码块，不要解释。如果图片无可识别资产，输出 {"items": []}。`;
@@ -214,8 +222,21 @@ async function callModel(apiKey: string, model: string, dataUrl: string): Promis
   if (!content) throw new Error('模型未返回有效内容');
 
   const parsed = safeParseJson(content);
-  const items: RecognizedAsset[] = Array.isArray(parsed?.items) ? parsed.items : [];
-  return items.map(normalize).filter(Boolean) as RecognizedAsset[];
+  const rawItems: any[] = Array.isArray(parsed?.items) ? parsed.items : [];
+  const normalized = rawItems.map(normalize).filter(Boolean) as RecognizedAsset[];
+
+  console.groupCollapsed(`[recognize] ${model} → ${normalized.length} item(s)`);
+  console.log('raw content string:', content);
+  console.log('parsed.items (model output):', rawItems);
+  console.log('normalized (after filter):', normalized);
+  const fixedIncomeFields = ['termMonths', 'interestRate', 'startDate', 'maturityDate'];
+  rawItems.forEach((it, i) => {
+    const missing = fixedIncomeFields.filter(f => it?.[f] === undefined || it?.[f] === null || it?.[f] === '');
+    if (missing.length) console.warn(`item[${i}] "${it?.name}" missing fixed-income fields:`, missing);
+  });
+  console.groupEnd();
+
+  return normalized;
 }
 
 /**
@@ -305,6 +326,8 @@ function normalize(raw: any): RecognizedAsset | null {
     interestRate: numOrUndef(raw.interestRate),
     startDate: typeof raw.startDate === 'string' ? raw.startDate : undefined,
     maturityDate: typeof raw.maturityDate === 'string' ? raw.maturityDate : undefined,
+    transferredInterest: numOrUndef(raw.transferredInterest),
+    holdingDays: numOrUndef(raw.holdingDays),
     annualizedReturn: numOrUndef(raw.annualizedReturn),
     totalReturn: numOrUndef(raw.totalReturn)
   };

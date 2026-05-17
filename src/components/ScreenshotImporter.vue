@@ -88,8 +88,15 @@ async function confirmImport() {
   const news: RecognizedAsset[] = [];
 
   for (const it of selected) {
+    // 截图里只给"已持有 N 天"没给具体起息日 → 反算 startDate
+    const r = { ...it.recognized };
+    if (!r.startDate && r.holdingDays !== undefined && r.holdingDays >= 0) {
+      const t = new Date();
+      t.setDate(t.getDate() - Math.floor(r.holdingDays));
+      r.startDate = t.toISOString().slice(0, 10);
+    }
+
     if (it.matchedAssetId) {
-      const r = it.recognized;
       // 透传所有识别到的基础事实字段（不仅金额），供 LLM 派生计算用
       const patch: any = {
         balance: r.balance,
@@ -108,10 +115,11 @@ async function confirmImport() {
       if (r.interestRate !== undefined) patch.interestRate = r.interestRate;
       if (r.startDate) patch.startDate = r.startDate;
       if (r.maturityDate) patch.maturityDate = r.maturityDate;
+      if (r.transferredInterest !== undefined) patch.transferredInterest = r.transferredInterest;
       if (r.note) patch.note = r.note;
       updates.push({ id: it.matchedAssetId, patch });
     } else {
-      news.push(it.recognized);
+      news.push(r);
     }
   }
 
@@ -133,7 +141,8 @@ async function confirmImport() {
       termMonths: n.termMonths,
       interestRate: n.interestRate,
       startDate: n.startDate,
-      maturityDate: n.maturityDate
+      maturityDate: n.maturityDate,
+      transferredInterest: n.transferredInterest
     });
   }
   reset();
@@ -165,6 +174,13 @@ function modelLabel(name?: string) {
 function goSetup() {
   emit('close');
   router.push({ path: '/setup-key', query: { from: '/' } });
+}
+
+function hasMeta(r: RecognizedAsset): boolean {
+  return r.interestRate !== undefined
+      || r.termMonths !== undefined
+      || !!r.startDate
+      || !!r.maturityDate;
 }
 </script>
 
@@ -271,6 +287,21 @@ function goSetup() {
               <template v-if="it.matchedAsset">
                 · 原 ¥{{ formatCompact(it.matchedAsset.balance) }}
               </template>
+            </div>
+            <div v-if="hasMeta(it.recognized)"
+                 class="flex gap-x-2 gap-y-0.5 flex-wrap text-[10px] text-ink-muted mt-0.5">
+              <span v-if="it.recognized.interestRate !== undefined">
+                利率 <b class="text-brand font-700">{{ it.recognized.interestRate }}%</b>
+              </span>
+              <span v-if="it.recognized.termMonths !== undefined">
+                期限 <b class="text-brand font-700">{{ it.recognized.termMonths }}个月</b>
+              </span>
+              <span v-if="it.recognized.startDate">
+                起息 <b class="text-brand font-700">{{ it.recognized.startDate }}</b>
+              </span>
+              <span v-if="it.recognized.maturityDate">
+                到期 <b class="text-brand font-700">{{ it.recognized.maturityDate }}</b>
+              </span>
             </div>
           </div>
           <div class="text-right shrink-0">
