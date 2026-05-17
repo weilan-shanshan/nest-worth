@@ -241,8 +241,16 @@ function toast(msg: string) {
         </button>
       </div>
       <div v-else>
-        <div class="text-[13px] font-600">Free · 未登录</div>
-        <div class="text-[11px] text-ink-muted mt-1 leading-relaxed">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <div class="text-[13px] font-600">Free · 未登录</div>
+          <button
+            class="tap text-[12px] font-600 px-3 py-1.5 rounded bg-brand text-white"
+            @click="router.push('/auth/login')"
+          >
+            登录
+          </button>
+        </div>
+        <div class="text-[11px] text-ink-muted leading-relaxed">
           商业化档位（Plus / Pro / Max / Studio）即将上线；登录后才能使用平台代付的 LLM 配额、复盘 PDF 等服务。
           账号只存订阅状态，<span class="font-600 text-ink">永不存任何资产数据</span>。
         </div>
