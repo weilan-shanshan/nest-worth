@@ -3,11 +3,21 @@ import { pool } from '../db.js';
 import { requestLinkSchema, verifyLinkSchema } from '../schema.js';
 import { hashEmail, hashToken, generateMagicToken } from '../lib/hash.js';
 import { signSession } from '../lib/jwt.js';
+import { getMailSender, buildMagicLinkMail } from '../lib/mail/index.js';
+import { ensureCurrentPeriodQuota } from '../lib/quota.js';
 
 export const auth = new Hono();
 
 const MAGIC_TTL_MIN = 15;
 const MAGIC_BASE = process.env.MAGIC_LINK_BASE_URL || 'http://localhost:5173/auth/verify';
+
+/** 用户的 created_at 是否落在当前自然月内（用于首月奖励配额判断） */
+function isCurrentMonth(createdAt: Date | string): boolean {
+  const c = createdAt instanceof Date ? createdAt : new Date(createdAt);
+  const now = new Date();
+  return c.getUTCFullYear() === now.getUTCFullYear()
+      && c.getUTCMonth() === now.getUTCMonth();
+}
 
 /**
  * POST /auth/request-link
@@ -41,9 +51,14 @@ auth.post('/request-link', async (c) => {
   }
 
   const link = `${MAGIC_BASE}?token=${rawToken}`;
-  // Sprint 0：邮件 stub。生产请勿打印 link 到日志（会包含原 token）。
-  console.log(`[auth.request-link] DEV stub email to ${email}`);
-  console.log(`[auth.request-link] DEV magic link: ${link}`);
+
+  // 投递邮件；失败也不返错（避免暴露邮箱存在性 + 用户体验一致）
+  try {
+    const mail = getMailSender();
+    await mail.send(buildMagicLinkMail({ to: email, link, ttlMin: MAGIC_TTL_MIN }));
+  } catch (err) {
+    console.error('[auth.request-link] mail send failed', err);
+  }
 
   return c.body(null, 204);
 });
@@ -87,7 +102,7 @@ auth.post('/verify', async (c) => {
     const { rows: userRows } = await client.query(
       `INSERT INTO users (email_hash) VALUES ($1)
          ON CONFLICT (email_hash) DO UPDATE SET updated_at = NOW()
-       RETURNING id, subscription_tier`,
+       RETURNING id, subscription_tier, created_at`,
       [tok.email_hash]
     );
     const u = userRows[0];
@@ -96,6 +111,11 @@ auth.post('/verify', async (c) => {
       `UPDATE magic_link_tokens SET used_at = NOW() WHERE token_hash = $1`,
       [tokenHash]
     );
+
+    // 当月 quota_snapshot 不存在则创建（幂等）
+    // 注册当月（created_at 在本月内）享受首月翻倍
+    const firstMonth = isCurrentMonth(u.created_at);
+    await ensureCurrentPeriodQuota(u.id, u.subscription_tier, firstMonth, client);
 
     await client.query('COMMIT');
 
