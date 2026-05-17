@@ -38,8 +38,12 @@ export const db = new NestworthDB();
 
 export async function getOrInitSettings(): Promise<Settings> {
   const existing = await db.settings.toCollection().first();
-  if (existing) return existing;
-  const s: Settings = { baseCurrency: 'CNY', privacyMode: false };
+  if (existing) {
+    // 兼容老数据：analyticsEnabled 未显式设过时按"默认开"处理
+    if (existing.analyticsEnabled === undefined) existing.analyticsEnabled = true;
+    return existing;
+  }
+  const s: Settings = { baseCurrency: 'CNY', privacyMode: false, analyticsEnabled: true };
   s.id = await db.settings.add(s);
   return s;
 }

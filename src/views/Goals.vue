@@ -8,6 +8,7 @@ import { formatMoney } from '../lib/format';
 import type { Goal } from '../types';
 import { adviseGoal, clearAdviceCache, type GoalAdvice, type AdviceMeta } from '../lib/advisor';
 import AdviceMetaFooter from '../components/AdviceMetaFooter.vue';
+import { trackCta } from '../lib/analytics';
 
 const store = useAppStore();
 const open = ref(false);
@@ -45,8 +46,12 @@ async function save() {
     current: Number(form.current) || 0,
     deadline: form.deadline || undefined
   };
-  if (editing.value?.id) await store.updateGoal(editing.value.id, payload);
-  else await store.addGoal(payload);
+  if (editing.value?.id) {
+    await store.updateGoal(editing.value.id, payload);
+  } else {
+    await store.addGoal(payload);
+    trackCta('add_goal');
+  }
   open.value = false;
 }
 

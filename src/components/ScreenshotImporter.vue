@@ -6,6 +6,7 @@ import AssetIcon from './AssetIcon.vue';
 import { recognizeAssetScreenshot, MODEL_CHAIN, type RecognizedAsset } from '../lib/recognize';
 import { matchRecognized, type MatchResult } from '../lib/asset-match';
 import { useAppStore } from '../store/assets';
+import { trackCta } from '../lib/analytics';
 import { CATEGORY_MAP } from '../lib/asset-meta';
 import { formatCompact } from '../lib/format';
 
@@ -44,6 +45,7 @@ function pick(e: Event) {
 
 async function recognize() {
   if (files.value.length === 0) return;
+  trackCta('import_screenshot');
   loading.value = true;
   error.value = null;
   items.value = [];

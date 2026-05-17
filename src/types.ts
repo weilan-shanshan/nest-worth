@@ -110,4 +110,9 @@ export interface Settings {
   deriveMode?: DeriveMode;
   /** 整库最近一次重算时间戳；> 12h 时下次 load 自动重算 */
   derivedAllAt?: number;
+  /**
+   * 网站访问统计开关（仅采集 PV/UV/CTR/停留时长，绝不上传业务数据）。
+   * 默认 true，用户在「设置」可一键关闭。
+   */
+  analyticsEnabled?: boolean;
 }

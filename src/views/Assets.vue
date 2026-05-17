@@ -9,6 +9,7 @@ import SupplementInfoModal from '../components/SupplementInfoModal.vue';
 import { CATEGORIES, CATEGORY_MAP } from '../lib/asset-meta';
 import { formatMoney, formatPct, formatCompact } from '../lib/format';
 import type { Asset, AssetCategory } from '../types';
+import { trackCta } from '../lib/analytics';
 
 const store = useAppStore();
 const filter = ref<AssetCategory | 'all'>('all');
@@ -115,6 +116,7 @@ async function onSave(data: any) {
   } else {
     const a = await store.addAsset(data);
     id = a.id;
+    trackCta('add_asset_manual');
   }
   editorOpen.value = false;
   // 编辑保存后立刻重算单条派生
@@ -147,6 +149,7 @@ async function onSupplementSave(patch: Partial<Asset>) {
 }
 
 async function manualRecompute() {
+  trackCta('recompute_derived');
   await store.recomputeDerived();
 }
 

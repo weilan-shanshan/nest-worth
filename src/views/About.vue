@@ -51,7 +51,7 @@ const values = [
     tag: '本地优先',
     title: '你的资产数据，永远不离开你的设备',
     before: '记账类 SaaS 都要你注册账号，把账户密码、所有持仓上传到他们服务器。',
-    after: '我们没有服务器、没有账号、没有埋点。\n所有数据存在你浏览器的 IndexedDB 里，跟你的 Cookie 一样属于你自己。\n截图也只在识别那 1 秒上传给阿里云 OCR，处理完即弃。',
+    after: '个人资产数据 100% 本地存储，绝不上传服务器（金额、资产名、Key、ticker 全部留在你浏览器）。\n所有资产数据存在你浏览器的 IndexedDB 里，跟你的 Cookie 一样属于你自己。\n截图只在识别那 1 秒上传给阿里云 OCR，处理完即弃。\n\n网站会统计有多少人来用、点了哪些按钮、停留多久，用来判断哪些功能要保留或改进；不含任何资产信息，「设置 → 网站访问统计」可一键关闭。',
   }
 ];
 
@@ -95,11 +95,11 @@ const fits = [
 ];
 
 const promises = [
-  { icon: 'i-ph-database-duotone', title: '资产数据 100% 在你设备', body: '全部存在浏览器 IndexedDB 里，没有服务器，永远不上传。换设备靠你自己导出 JSON 迁移。' },
+  { icon: 'i-ph-database-duotone', title: '资产数据 100% 在你设备', body: '全部存在浏览器 IndexedDB 里，永远不上传服务器。换设备靠你自己导出 JSON 迁移。' },
   { icon: 'i-ph-image-square-duotone', title: '截图识别完即弃', body: '截图只在识别瞬间传给阿里云 OCR，结构化结果回到你设备后原图就消失，我们这边没有任何留存。' },
-  { icon: 'i-ph-key-duotone', title: 'API Key 在你浏览器加密', body: '不用注册账号，Key 跟你的 Cookie 一样属于你。可随时在设置页清除。' },
+  { icon: 'i-ph-key-duotone', title: 'API Key 在你浏览器', body: '不用注册账号，Key 跟你的 Cookie 一样属于你。可随时在设置页清除。' },
   { icon: 'i-ph-broadcast-duotone', title: 'AI 调用都标注来源', body: '每张建议卡底部明示用了哪个模型、抓了哪些实时数据、何时生成。可以审，可以核。' },
-  { icon: 'i-ph-globe-duotone', title: '部署在 Cloudflare Pages', body: '纯静态前端，没有后端进程，没有埋点 SDK，没有第三方分析。' }
+  { icon: 'i-ph-chart-bar-duotone', title: '只统计基础访问数据', body: '只看有多少人来用、点了哪些按钮、停留多久，用来判断功能效果。绝不含资产 / 金额 / Key / ticker。设置里可一键关。' }
 ];
 </script>
 
@@ -277,7 +277,7 @@ const promises = [
         前端：Vue 3 + TypeScript + Vite + UnoCSS + ECharts + Dexie<br/>
         AI：阿里云百炼（Qwen-VL Plus/Max · Qwen2.5-VL · QVQ · DeepSeek-R1 · DeepSeek-V3 · Qwen-Max）<br/>
         市场数据：CoinGecko · open.er-api.com · Frankfurter (ECB)<br/>
-        部署：Cloudflare Pages — 纯静态、零后端、无埋点
+        部署：Cloudflare Pages — 纯静态前端，资产数据全在本地
       </p>
     </section>
 

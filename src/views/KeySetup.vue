@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAppStore } from '../store/assets';
+import { trackCta } from '../lib/analytics';
+
+onMounted(() => trackCta('setup_key_start'));
 
 const router = useRouter();
 const route = useRoute();
@@ -68,6 +71,7 @@ async function verifyAndSave() {
 
     // 验证通过 → 保存
     await store.setApiKey(key);
+    trackCta('setup_key_done');
     verifyResult.value = 'success';
     setTimeout(() => router.push(returnTo.value), 1500);
   } catch (e: any) {

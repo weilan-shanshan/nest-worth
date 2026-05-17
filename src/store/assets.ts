@@ -5,6 +5,7 @@ import type { Asset, AssetCategory, Goal, Settings, Snapshot } from '../types';
 import { todayStr } from '../lib/format';
 import { refreshAssetQuotes } from '../lib/quotes';
 import { recomputeDerived as runRecompute, isStale, type RecomputeOptions } from '../lib/derive';
+import { setEnabled as setAnalyticsSdkEnabled } from '../lib/analytics';
 
 export const useAppStore = defineStore('app', () => {
   const assets = ref<Asset[]>([]);
@@ -24,6 +25,7 @@ export const useAppStore = defineStore('app', () => {
     snapshots.value = s;
     goals.value = g;
     settings.value = st;
+    setAnalyticsSdkEnabled(st.analyticsEnabled !== false);
     ready.value = true;
 
     if (a.length === 0) {
@@ -142,6 +144,11 @@ export const useAppStore = defineStore('app', () => {
 
   async function setPrivacy(p: boolean) {
     settings.value = await updateSettings({ privacyMode: p });
+  }
+
+  async function setAnalyticsEnabled(v: boolean) {
+    settings.value = await updateSettings({ analyticsEnabled: v });
+    setAnalyticsSdkEnabled(v);
   }
 
   async function refreshSettings() {
@@ -349,7 +356,7 @@ export const useAppStore = defineStore('app', () => {
     totalNetWorth, dailyChange, dailyChangePct, byCategory, hasApiKey,
     load, addAsset, updateAsset, deleteAsset, bulkUpdate,
     addGoal, updateGoal, deleteGoal,
-    setApiKey, setPrivacy, refreshSettings, exportAll, importAll,
+    setApiKey, setPrivacy, setAnalyticsEnabled, refreshSettings, exportAll, importAll,
     refreshQuotes, maybeRefreshQuotes, quotesRefreshing, quotesLastResult,
     recomputeDerived, deriving
   };

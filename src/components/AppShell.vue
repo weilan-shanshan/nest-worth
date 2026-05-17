@@ -14,6 +14,8 @@ const tabs = [
 ];
 
 const active = computed(() => route.name);
+// 隐藏后台 / 配置引导等独立流程页的底部 tab
+const hideTab = computed(() => route.name === 'admin' || route.name === 'setupKey');
 </script>
 
 <template>
@@ -21,12 +23,13 @@ const active = computed(() => route.name);
        :style="{ height: '100dvh' }">
     <div class="relative w-full h-full sm:max-w-[420px] sm:h-[860px] sm:rounded-app sm:shadow-2xl bg-bg overflow-hidden flex flex-col">
       <!-- 内容滚动区 -->
-      <main class="flex-1 overflow-y-auto scroll-hide pb-28">
+      <main class="flex-1 overflow-y-auto scroll-hide" :class="hideTab ? '' : 'pb-28'">
         <slot />
       </main>
 
-      <!-- 底部导航 -->
-      <nav class="absolute bottom-3 left-3 right-3 h-16 bg-white/95 backdrop-blur rounded-nav shadow-[0_8px_24px_rgba(46,158,96,0.12)] border border-border flex items-center justify-around px-2">
+      <!-- 底部导航（后台等独立流程页隐藏） -->
+      <nav v-if="!hideTab"
+           class="absolute bottom-3 left-3 right-3 h-16 bg-white/95 backdrop-blur rounded-nav shadow-[0_8px_24px_rgba(46,158,96,0.12)] border border-border flex items-center justify-around px-2">
         <button
           v-for="t in tabs"
           :key="t.name"

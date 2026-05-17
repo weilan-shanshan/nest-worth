@@ -7,6 +7,7 @@ import { MODEL_CHAIN, ANALYST_CHAIN, resetExhaustedModels, setPreferredModel } f
 import { clearAdviceCache } from '../lib/advisor';
 import InstallEntryCard from '../components/InstallEntryCard.vue';
 import { isQuoteProxyConfigured } from '../lib/quotes';
+import { trackCta } from '../lib/analytics';
 import type { DeriveMode } from '../types';
 
 const router = useRouter();
@@ -148,6 +149,7 @@ const proxyOn = isQuoteProxyConfigured();
 const lastQuoteAt = computed(() => store.quotesLastResult?.at);
 
 async function manualRefreshQuotes() {
+  trackCta('refresh_quotes');
   const r = await store.refreshQuotes();
   toast(`已刷新 ${r.updated} 项${r.skipped ? ` · ${r.skipped} 项失败` : ''}`);
 }
@@ -172,6 +174,7 @@ async function setDeriveMode(mode: DeriveMode) {
 }
 
 async function manualRecomputeDerived() {
+  trackCta('recompute_derived');
   await store.recomputeDerived();
   toast('派生数据已重算');
 }
@@ -186,7 +189,7 @@ function toast(msg: string) {
   <div class="px-5 pt-12 flex flex-col gap-5">
     <header>
       <h1 class="font-brand font-600 text-2xl">设置</h1>
-      <p class="text-xs text-ink-muted mt-1">数据全部保存在本设备 IndexedDB，不上传任何服务器</p>
+      <p class="text-xs text-ink-muted mt-1">个人资产数据 100% 本地，绝不上传服务器</p>
     </header>
 
     <!-- 安装到主屏（PWA 入口） -->
@@ -489,6 +492,25 @@ function toast(msg: string) {
       </button>
     </section>
 
+    <!-- 网站访问统计 -->
+    <section class="card-base flex items-start justify-between gap-3">
+      <div class="flex-1 min-w-0">
+        <div class="font-700 text-[14px]">网站访问统计</div>
+        <div class="text-[11px] text-ink-muted mt-0.5 leading-relaxed">
+          只统计<b class="text-ink">有多少人来用、点了哪些按钮、停留多久</b>，<br/>
+          用来判断哪些功能受欢迎、哪里要改进。<b class="text-pos">绝不上传你的资产、金额、Key</b>。
+        </div>
+      </div>
+      <button
+        class="tap w-12 h-7 rounded-full transition-colors relative shrink-0 mt-0.5"
+        :class="store.settings.analyticsEnabled !== false ? 'bg-brand' : 'bg-border'"
+        @click="store.setAnalyticsEnabled(store.settings.analyticsEnabled === false)"
+      >
+        <span class="absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform"
+              :style="{ transform: store.settings.analyticsEnabled !== false ? 'translateX(22px)' : 'translateX(2px)' }" />
+      </button>
+    </section>
+
     <!-- 数据管理 -->
     <section class="card-base flex flex-col gap-1">
       <h3 class="font-700 text-[15px] mb-1">数据管理</h3>
@@ -526,7 +548,7 @@ function toast(msg: string) {
       </div>
       <p class="text-xs text-ink-muted leading-relaxed">
         把分散在各处的资产汇总到一处。<br/>
-        本地优先，零服务器存储。<br/>
+        资产数据本地存储，不上传服务器。<br/>
         v0.1.0 · made with care
       </p>
     </section>
