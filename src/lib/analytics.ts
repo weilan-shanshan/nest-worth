@@ -128,16 +128,20 @@ function basePayload(): Omit<BasePayload, 'event'> {
 function send(payload: BasePayload) {
   if (!isEnabled()) return;
   try {
-    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+    const body = JSON.stringify(payload);
+    // 走 text/plain 是 CORS-safelisted MIME，sendBeacon 跨域下唯一可靠的姿势
+    // （application/json 会触发 preflight 后 Chrome 会切断实际 POST）
+    // 后端 track 路由会同时按 JSON / text 双路径解析。
+    const blob = new Blob([body], { type: 'text/plain;charset=UTF-8' });
     if (navigator.sendBeacon) {
       navigator.sendBeacon(`${ENDPOINT}/track`, blob);
     } else {
       // 极旧浏览器兜底：fetch keepalive
       fetch(`${ENDPOINT}/track`, {
         method: 'POST',
-        body: blob,
+        body,
         keepalive: true,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' }
       }).catch(() => { /* 静默失败 */ });
     }
   } catch {

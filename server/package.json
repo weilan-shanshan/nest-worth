@@ -11,7 +11,7 @@
     "migrate": "psql \"$DATABASE_URL\" -f sql/schema.sql"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=18.19"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
