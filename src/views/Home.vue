@@ -140,8 +140,9 @@ function maskOrShow(text: string) {
 
     <!-- 净值 + 月增长图 一体卡 -->
     <section class="rounded-card bg-card border border-border p-4 shadow-[0_8px_24px_rgba(46,158,96,0.06)]">
-      <div class="flex items-center justify-between">
-        <span class="text-[11px] text-ink-muted font-600">总净值 · 净值</span>
+      <div class="flex items-baseline justify-between">
+        <span class="font-700 text-[17px] text-brand leading-none tracking-[0.1em] pb-0.5 border-b-2 border-brand/30 inline-block"
+              style="font-family: 'Songti SC', 'STSong', 'Noto Serif CJK SC', SimSun, serif;">净值</span>
         <span class="text-[10px] text-ink-muted">{{ store.assets.length }} 项 · {{ assetGroups.length }} 类</span>
       </div>
 
