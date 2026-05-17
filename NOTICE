@@ -1,0 +1,47 @@
+Nestworth
+Copyright (c) 2026 weilan-shanshan
+All rights reserved.
+
+This product is licensed under the Business Source License 1.1
+(see LICENSE).
+
+------------------------------------------------------------------------------
+
+Historical license notice
+-------------------------
+
+Code committed to this repository on or before commit f6e6500
+(tag v0.2.1-final-mit, dated 2026-05-17) was originally released under
+the MIT License. Those historical snapshots remain available under MIT
+terms. See LEGACY-MIT.md for details.
+
+------------------------------------------------------------------------------
+
+Trademarks
+----------
+
+"Nestworth" and the Nestworth logo are unregistered trademarks of
+weilan-shanshan. Use of these names or marks to identify products or
+services derived from forks of this project that materially differ from
+upstream Nestworth requires written permission.
+
+The "Business Source License" name is a trademark of MariaDB Corporation
+Ab and is used here under the permission granted in the BSL 1.1 license
+text.
+
+------------------------------------------------------------------------------
+
+Third-party components
+----------------------
+
+This product depends on third-party libraries, each licensed under its
+own terms. See package.json (and the corresponding lockfile) for the
+authoritative list and refer to each upstream project for license text.
+
+------------------------------------------------------------------------------
+
+Contact
+-------
+
+Commercial licensing, partnership, or trademark inquiries:
+huoqilei.hql@alibaba-inc.com
