@@ -165,6 +165,80 @@ admin.get('/retention', async (c) => {
 });
 
 /**
+ * GET /admin/list-users
+ *
+ * 用户列表，支持 tier 过滤 + 分页。配合 Admin.vue 用户管理面板。
+ * Query: ?page=1&pageSize=20&tier=pro(可选)
+ *
+ * 返回字段刻意不含完整 email_hash，只 8 位前缀（避免管理员日常工作中接触到
+ * 任何可能反查出邮箱的足够信息；要升档/退订请通过 grant-tier 用完整邮箱）。
+ */
+admin.get('/list-users', async (c) => {
+  const page = Math.max(1, Number(c.req.query('page') || 1));
+  const pageSize = Math.min(100, Math.max(1, Number(c.req.query('pageSize') || 20)));
+  const tierFilter = c.req.query('tier');
+  const offset = (page - 1) * pageSize;
+
+  const where: string[] = [];
+  const params: any[] = [];
+  if (tierFilter && ['free','plus','pro','max','studio'].includes(tierFilter)) {
+    params.push(tierFilter);
+    where.push(`u.subscription_tier = $${params.length}`);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const periodStart = (() => {
+    const d = new Date();
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`;
+  })();
+
+  const [{ rows: totalRows }, { rows: userRows }] = await Promise.all([
+    pool.query(`SELECT COUNT(*) AS total FROM users u ${whereSql}`, params),
+    pool.query(
+      `SELECT u.id,
+              LEFT(u.email_hash, 8) AS email_hash_prefix,
+              u.subscription_tier,
+              u.subscription_status,
+              u.current_period_end,
+              u.trial_ends_at,
+              u.created_at,
+              u.updated_at,
+              q.ocr_quota, q.ocr_used,
+              q.analysis_quota, q.analysis_used
+         FROM users u
+         LEFT JOIN quota_snapshots q
+           ON q.user_id = u.id AND q.period_start = $${params.length + 1}::date
+         ${whereSql}
+         ORDER BY u.updated_at DESC
+         LIMIT $${params.length + 2} OFFSET $${params.length + 3}`,
+      [...params, periodStart, pageSize, offset]
+    )
+  ]);
+
+  return c.json({
+    page,
+    pageSize,
+    total: Number(totalRows[0]?.total || 0),
+    users: userRows.map(r => ({
+      id: r.id,
+      emailHashPrefix: r.email_hash_prefix,
+      tier: r.subscription_tier,
+      status: r.subscription_status,
+      currentPeriodEnd: r.current_period_end,
+      trialEndsAt: r.trial_ends_at,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      currentPeriod: r.ocr_quota === null ? null : {
+        ocrQuota: r.ocr_quota,
+        ocrUsed: r.ocr_used,
+        analysisQuota: r.analysis_quota,
+        analysisUsed: r.analysis_used
+      }
+    }))
+  });
+});
+
+/**
  * POST /admin/grant-tier
  *
  * 商业化过渡期：自动支付通道未上前，作者收到打款 / 转账后用 admin token 调本

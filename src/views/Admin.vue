@@ -13,13 +13,22 @@ const funnel = ref<any>(null);
 const retention = ref<any[]>([]);
 const range = ref<'7d' | '30d' | '90d'>('30d');
 
-async function fetchJson(path: string) {
+async function fetchJson(path: string, init?: RequestInit) {
   const res = await fetch(`${endpoint}${path}`, {
-    headers: { 'X-Admin-Token': token.value }
+    ...init,
+    headers: {
+      'X-Admin-Token': token.value,
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.headers || {})
+    }
   });
   if (res.status === 401) throw new Error('Token 无效（请检查 URL 中的 token 段）');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  if (!res.ok) {
+    let detail = '';
+    try { detail = JSON.stringify(await res.json()); } catch { /* ignore */ }
+    throw new Error(`HTTP ${res.status} ${detail}`);
+  }
+  return res.status === 204 ? null : res.json();
 }
 
 async function load() {
@@ -66,6 +75,113 @@ function fmtMs(ms: number | undefined): string {
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${(ms / 60000).toFixed(1)}min`;
 }
+
+// ===== 用户管理（Sprint 3 Day 3）=====
+
+type Tier = 'free' | 'plus' | 'pro' | 'max' | 'studio';
+type Status = 'active' | 'trialing' | 'cancelled' | 'expired' | 'past_due';
+
+interface AdminUser {
+  id: string;
+  emailHashPrefix: string;
+  tier: Tier;
+  status: Status;
+  currentPeriodEnd: string | null;
+  trialEndsAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  currentPeriod: { ocrQuota: number; ocrUsed: number; analysisQuota: number; analysisUsed: number } | null;
+}
+
+const usersLoading = ref(false);
+const usersError = ref<string | null>(null);
+const users = ref<AdminUser[]>([]);
+const usersTotal = ref(0);
+const usersPage = ref(1);
+const usersPageSize = 20;
+const usersFilterTier = ref<Tier | ''>('');
+
+const grant = ref({
+  email: '',
+  tier: 'pro' as Tier,
+  status: 'active' as Status,
+  periodEndDays: 30,
+  createIfMissing: true
+});
+const grantSubmitting = ref(false);
+const grantMessage = ref<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+async function loadUsers() {
+  if (!endpoint) return;
+  usersLoading.value = true;
+  usersError.value = null;
+  try {
+    const q = new URLSearchParams();
+    q.set('page', String(usersPage.value));
+    q.set('pageSize', String(usersPageSize));
+    if (usersFilterTier.value) q.set('tier', usersFilterTier.value);
+    const r = await fetchJson(`/admin/list-users?${q.toString()}`);
+    users.value = r.users;
+    usersTotal.value = r.total;
+  } catch (e: any) {
+    usersError.value = e.message;
+  } finally {
+    usersLoading.value = false;
+  }
+}
+
+async function submitGrant() {
+  if (!grant.value.email || !grant.value.email.includes('@')) {
+    grantMessage.value = { kind: 'err', text: '请输入合法邮箱' };
+    return;
+  }
+  grantSubmitting.value = true;
+  grantMessage.value = null;
+  try {
+    // 计算 periodEnd ISO
+    let periodEnd: string | null = null;
+    if (grant.value.periodEndDays > 0) {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() + Math.floor(grant.value.periodEndDays));
+      periodEnd = d.toISOString();
+    }
+    const body = {
+      email: grant.value.email.trim(),
+      tier: grant.value.tier,
+      status: grant.value.status,
+      periodEnd,
+      createIfMissing: grant.value.createIfMissing
+    };
+    const r = await fetchJson('/admin/grant-tier', { method: 'POST', body: JSON.stringify(body) });
+    grantMessage.value = {
+      kind: 'ok',
+      text: `✓ ${grant.value.email} ${r.previousTier ?? '(new)'} → ${r.tier} · 到期 ${periodEnd?.slice(0, 10) ?? '无'}`
+    };
+    grant.value.email = '';   // 清空避免误提交
+    await loadUsers();
+  } catch (e: any) {
+    grantMessage.value = { kind: 'err', text: e.message };
+  } finally {
+    grantSubmitting.value = false;
+  }
+}
+
+function selectUserToEdit(u: AdminUser) {
+  // 已知前 8 位哈希，admin 仍需手动填邮箱（哈希不可逆）；只回填 tier/status/period
+  grant.value.tier = u.tier;
+  grant.value.status = u.status;
+  if (u.currentPeriodEnd) {
+    const days = Math.max(0, Math.round((new Date(u.currentPeriodEnd).getTime() - Date.now()) / 86400000));
+    grant.value.periodEndDays = days;
+  }
+  grantMessage.value = { kind: 'ok', text: `已回填 ${u.tier}/${u.status} · 请补完邮箱后提交` };
+  // 滚到表单顶部
+  document.getElementById('user-mgmt-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+const usersTotalPages = computed(() => Math.max(1, Math.ceil(usersTotal.value / usersPageSize)));
+
+onMounted(() => loadUsers());
 </script>
 
 <template>
@@ -136,6 +252,140 @@ function fmtMs(ms: number | undefined): string {
             点击 {{ fmt(c.clicks) }} · 设备 {{ fmt(c.uniqDevices) }}
           </span>
         </div>
+      </div>
+    </section>
+
+    <!-- User Management (Sprint 3 Day 3) -->
+    <section id="user-mgmt-form" class="card-base">
+      <h3 class="font-700 text-sm mb-3">用户管理 · 手动升档</h3>
+      <div class="grid grid-cols-2 gap-2 text-[12px]">
+        <label class="flex flex-col gap-1 col-span-2">
+          <span class="text-ink-muted text-[10px]">邮箱 *</span>
+          <input v-model="grant.email" type="email" placeholder="user@example.com"
+                 class="px-2.5 py-1.5 rounded border border-line bg-card focus:outline-none focus:border-brand" />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-ink-muted text-[10px]">档位</span>
+          <select v-model="grant.tier" class="px-2 py-1.5 rounded border border-line bg-card">
+            <option value="free">Free</option>
+            <option value="plus">Plus</option>
+            <option value="pro">Pro</option>
+            <option value="max">Max</option>
+            <option value="studio">Studio</option>
+          </select>
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-ink-muted text-[10px]">状态</span>
+          <select v-model="grant.status" class="px-2 py-1.5 rounded border border-line bg-card">
+            <option value="active">active</option>
+            <option value="trialing">trialing</option>
+            <option value="cancelled">cancelled</option>
+            <option value="expired">expired</option>
+            <option value="past_due">past_due</option>
+          </select>
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-ink-muted text-[10px]">到期（天后，0 = 无到期）</span>
+          <input v-model.number="grant.periodEndDays" type="number" min="0" max="730"
+                 class="px-2.5 py-1.5 rounded border border-line bg-card" />
+        </label>
+        <label class="flex items-center gap-2 text-[11px] mt-4">
+          <input v-model="grant.createIfMissing" type="checkbox" />
+          <span>邮箱不存在时自动创建</span>
+        </label>
+      </div>
+      <button
+        class="tap mt-3 w-full py-2 rounded font-700 text-[13px] transition-colors"
+        :class="grantSubmitting ? 'bg-line text-ink-muted' : 'bg-brand text-white'"
+        :disabled="grantSubmitting"
+        @click="submitGrant"
+      >
+        {{ grantSubmitting ? '提交中…' : '提交升档' }}
+      </button>
+      <div v-if="grantMessage"
+           class="mt-2 text-[11px] px-2.5 py-1.5 rounded"
+           :class="grantMessage.kind === 'ok' ? 'bg-brand/10 text-brand' : 'bg-neg/10 text-neg'">
+        {{ grantMessage.text }}
+      </div>
+    </section>
+
+    <!-- User List -->
+    <section class="card-base">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="font-700 text-sm">用户列表 · 共 {{ usersTotal }}</h3>
+        <div class="flex items-center gap-1.5">
+          <select v-model="usersFilterTier"
+                  @change="usersPage = 1; loadUsers()"
+                  class="text-[11px] px-2 py-1 rounded border border-line bg-card">
+            <option value="">全部档位</option>
+            <option value="free">Free</option>
+            <option value="plus">Plus</option>
+            <option value="pro">Pro</option>
+            <option value="max">Max</option>
+            <option value="studio">Studio</option>
+          </select>
+          <button class="tap h-7 px-2 rounded-icon text-[10px] font-700 bg-card border border-border text-ink-muted"
+                  @click="loadUsers">刷新</button>
+        </div>
+      </div>
+      <div v-if="usersError" class="text-[11px] text-neg mb-2">{{ usersError }}</div>
+      <div v-if="usersLoading" class="text-[11px] text-ink-muted">加载中…</div>
+      <div v-else class="overflow-x-auto">
+        <table class="text-[11px] w-full">
+          <thead>
+            <tr class="text-ink-muted">
+              <th class="text-left py-1.5">email#</th>
+              <th class="text-left">tier</th>
+              <th class="text-left">status</th>
+              <th class="text-right">OCR</th>
+              <th class="text-right">分析</th>
+              <th class="text-left">到期</th>
+              <th class="text-left">建于</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="u in users" :key="u.id" class="border-t border-border">
+              <td class="py-1.5 font-mono text-[10px]">{{ u.emailHashPrefix }}</td>
+              <td>
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-700"
+                      :class="{
+                        'bg-line/40 text-ink-muted': u.tier === 'free',
+                        'bg-blue/10 text-blue': u.tier === 'plus',
+                        'bg-brand/15 text-brand': u.tier === 'pro',
+                        'bg-orange/15 text-orange': u.tier === 'max',
+                        'bg-pos/15 text-pos': u.tier === 'studio'
+                      }">{{ u.tier }}</span>
+              </td>
+              <td>{{ u.status }}</td>
+              <td class="text-right tabular-nums">
+                <template v-if="u.currentPeriod">{{ u.currentPeriod.ocrUsed }}/{{ u.currentPeriod.ocrQuota }}</template>
+                <template v-else>—</template>
+              </td>
+              <td class="text-right tabular-nums">
+                <template v-if="u.currentPeriod">{{ u.currentPeriod.analysisUsed }}/{{ u.currentPeriod.analysisQuota }}</template>
+                <template v-else>—</template>
+              </td>
+              <td class="text-[10px] text-ink-muted">{{ u.currentPeriodEnd?.slice(0, 10) ?? '-' }}</td>
+              <td class="text-[10px] text-ink-muted">{{ u.createdAt.slice(0, 10) }}</td>
+              <td class="text-right">
+                <button class="tap text-[10px] text-brand underline" @click="selectUserToEdit(u)">回填</button>
+              </td>
+            </tr>
+            <tr v-if="users.length === 0"><td colspan="8" class="text-center text-ink-muted py-4">无用户</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-if="usersTotalPages > 1" class="flex items-center justify-center gap-2 mt-3 text-[11px]">
+        <button class="tap px-2 py-0.5 rounded border border-line"
+                :disabled="usersPage <= 1"
+                :class="usersPage <= 1 ? 'opacity-40' : ''"
+                @click="usersPage--; loadUsers()">‹ 上一页</button>
+        <span class="text-ink-muted">{{ usersPage }} / {{ usersTotalPages }}</span>
+        <button class="tap px-2 py-0.5 rounded border border-line"
+                :disabled="usersPage >= usersTotalPages"
+                :class="usersPage >= usersTotalPages ? 'opacity-40' : ''"
+                @click="usersPage++; loadUsers()">下一页 ›</button>
       </div>
     </section>
 
