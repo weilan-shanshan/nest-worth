@@ -32,7 +32,13 @@ export interface RunAnalysisResult {
   content: string;
   /** 用户看的标签：'DeepSeek-R1' / 'DeepSeek-R1 综合 2 个模型' */
   modelUsed: string;
-  /** 实际启用的 N（可能被 tier gate 降级） */
+  /** 客户端请求的 N */
+  requestedEnsembleSize: number;
+  /** 当前 tier 最大允许的 N */
+  allowedEnsembleSize: number;
+  /** = min(requested, allowed)，本次调用启动时计划的 N */
+  effectiveEnsembleSize: number;
+  /** 实际成功的 N（部分模型失败时可能 < effective） */
   actualEnsembleSize: number;
   /** 参与的模型 ID 列表（不含 synth） */
   ensembleModels: string[];
@@ -41,20 +47,46 @@ export interface RunAnalysisResult {
 }
 
 /**
- * 按 tier + 请求的 N 决定模型组合 + 综合者。
- * Sprint 2 Day 1 暂不做 tier 强制 gate（Day 4 加）；按请求 N 直接走。
- * 即便 ensembleSize > 3 也截断到 3。
+ * tier 决策表。
+ *   - maxN: 该 tier 允许的最大交叉验证档（N=1/2/3）。请求超出会被静默降级
+ *   - defaultModel: N=1 时用的模型；Free/Plus 走 V3 省成本，Pro/Max 走 R1
+ *
+ * 商业化方案：
+ *   - free / plus  → N=1 V3 单模型
+ *   - pro          → N≤2，主用 R1
+ *   - max          → N≤3 全顶配
+ *   - studio       → 走 BYOK，理论上不到这条路；兜底放宽到 N≤3
  */
-export function pickModels(_tier: SubscriptionTier, ensembleSize: number): { models: string[]; synth: string } {
-  const n = Math.max(1, Math.min(3, ensembleSize));
-  switch (n) {
+const TIER_GATE: Record<SubscriptionTier, { maxN: number; defaultModel: string }> = {
+  free:   { maxN: 1, defaultModel: 'deepseek-v3' },
+  plus:   { maxN: 1, defaultModel: 'deepseek-v3' },
+  pro:    { maxN: 2, defaultModel: 'deepseek-r1' },
+  max:    { maxN: 3, defaultModel: 'deepseek-r1' },
+  studio: { maxN: 3, defaultModel: 'deepseek-r1' }
+};
+
+export interface ModelPlan {
+  models: string[];
+  synth: string;
+  allowedN: number;
+  effectiveN: number;
+}
+
+export function pickModels(tier: SubscriptionTier, requested: number): ModelPlan {
+  const gate = TIER_GATE[tier] ?? TIER_GATE.free;
+  const allowedN = gate.maxN;
+  const effectiveN = Math.max(1, Math.min(allowedN, Math.floor(requested) || 1));
+
+  switch (effectiveN) {
     case 1:
-      return { models: ['deepseek-r1'], synth: 'deepseek-r1' };
+      return { models: [gate.defaultModel], synth: gate.defaultModel, allowedN, effectiveN };
     case 2:
-      return { models: ['deepseek-r1', 'deepseek-v3'], synth: 'deepseek-r1' };
+      // N=2 用 R1 + V3；R1 作综合者
+      return { models: ['deepseek-r1', 'deepseek-v3'], synth: 'deepseek-r1', allowedN, effectiveN };
     case 3:
     default:
-      return { models: ['deepseek-r1', 'qwen-max-latest', 'deepseek-v3'], synth: 'deepseek-r1' };
+      // N=3 顶配：R1（推理）+ Qwen-Max（中文金融）+ V3（性价比）；R1 综合
+      return { models: ['deepseek-r1', 'qwen-max-latest', 'deepseek-v3'], synth: 'deepseek-r1', allowedN, effectiveN };
   }
 }
 
@@ -75,12 +107,17 @@ export async function runAnalysis(opts: {
   ensembleSize: number;
   tier: SubscriptionTier;
 }): Promise<RunAnalysisResult> {
-  const { models, synth } = pickModels(opts.tier, opts.ensembleSize);
+  const plan = pickModels(opts.tier, opts.ensembleSize);
+  const sharedMeta = {
+    requestedEnsembleSize: opts.ensembleSize,
+    allowedEnsembleSize: plan.allowedN,
+    effectiveEnsembleSize: plan.effectiveN
+  };
   const callLogs: ModelCallLog[] = [];
 
   // ----- N=1：直接调一次 -----
-  if (models.length === 1) {
-    const m = models[0];
+  if (plan.models.length === 1) {
+    const m = plan.models[0];
     try {
       const r = await callOne({ model: m, prompt: opts.prompt, system: opts.system });
       const cost = computeCostCents(m, r.tokensIn, r.tokensOut);
@@ -88,6 +125,7 @@ export async function runAnalysis(opts: {
       return {
         content: r.content,
         modelUsed: m,
+        ...sharedMeta,
         actualEnsembleSize: 1,
         ensembleModels: [m],
         callLogs
@@ -101,12 +139,12 @@ export async function runAnalysis(opts: {
 
   // ----- N≥2：并行 + 综合 -----
   const settled = await Promise.allSettled(
-    models.map(m => callOne({ model: m, prompt: opts.prompt, system: opts.system }))
+    plan.models.map(m => callOne({ model: m, prompt: opts.prompt, system: opts.system }))
   );
 
   const successful: { model: string; content: string }[] = [];
   settled.forEach((r, idx) => {
-    const m = models[idx];
+    const m = plan.models[idx];
     if (r.status === 'fulfilled') {
       const cost = computeCostCents(m, r.value.tokensIn, r.value.tokensOut);
       callLogs.push({ model: m, tokensIn: r.value.tokensIn, tokensOut: r.value.tokensOut, costCents: cost, role: 'parallel', ok: true });
@@ -127,6 +165,7 @@ export async function runAnalysis(opts: {
     return {
       content: successful[0].content,
       modelUsed: `${successful[0].model}（其它模型失败）`,
+      ...sharedMeta,
       actualEnsembleSize: 1,
       ensembleModels: successful.map(s => s.model),
       callLogs
@@ -136,26 +175,28 @@ export async function runAnalysis(opts: {
   // 多个成功 → synth
   try {
     const synthResult = await callOne({
-      model: synth,
+      model: plan.synth,
       prompt: buildSynthPrompt(successful),
       system: SYNTH_SYSTEM
     });
-    const cost = computeCostCents(synth, synthResult.tokensIn, synthResult.tokensOut);
-    callLogs.push({ model: synth, tokensIn: synthResult.tokensIn, tokensOut: synthResult.tokensOut, costCents: cost, role: 'synth', ok: true });
+    const cost = computeCostCents(plan.synth, synthResult.tokensIn, synthResult.tokensOut);
+    callLogs.push({ model: plan.synth, tokensIn: synthResult.tokensIn, tokensOut: synthResult.tokensOut, costCents: cost, role: 'synth', ok: true });
     return {
       content: synthResult.content,
-      modelUsed: `${synth} 综合 ${successful.length} 个模型`,
+      modelUsed: `${plan.synth} 综合 ${successful.length} 个模型`,
+      ...sharedMeta,
       actualEnsembleSize: successful.length,
       ensembleModels: successful.map(s => s.model),
       callLogs
     };
   } catch (e) {
     const err = e as BailianAnalystError;
-    callLogs.push({ model: synth, tokensIn: 0, tokensOut: 0, costCents: 0, role: 'synth', ok: false, errMessage: err.message });
+    callLogs.push({ model: plan.synth, tokensIn: 0, tokensOut: 0, costCents: 0, role: 'synth', ok: false, errMessage: err.message });
     // 综合失败：用第一个成功的原始回答
     return {
       content: successful[0].content,
       modelUsed: `${successful[0].model}（综合失败用原结果）`,
+      ...sharedMeta,
       actualEnsembleSize: successful.length,
       ensembleModels: successful.map(s => s.model),
       callLogs

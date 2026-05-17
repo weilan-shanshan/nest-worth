@@ -199,6 +199,9 @@ llm.post('/analysis', async (c) => {
     content: result.content,
     modelUsed: result.modelUsed,
     ensembleModels: result.ensembleModels,
+    requestedEnsembleSize: result.requestedEnsembleSize,
+    allowedEnsembleSize: result.allowedEnsembleSize,
+    effectiveEnsembleSize: result.effectiveEnsembleSize,
     actualEnsembleSize: result.actualEnsembleSize,
     quota: after,
     trace: traceId
