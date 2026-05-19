@@ -29,8 +29,16 @@ export function getMailSender(): MailSender {
       instance = new StubMailSender();
       return instance;
     }
-    instance = new TencentSesMailSender({ secretId, secretKey, region, fromEmailAddress: from });
-    console.log(`[mail] Tencent SES enabled · region=${region} from=${from}`);
+    const templateIdRaw = process.env.TENCENT_SES_TEMPLATE_ID;
+    const templateId = templateIdRaw ? Number(templateIdRaw) : undefined;
+    if (templateIdRaw && (!Number.isInteger(templateId) || templateId! <= 0)) {
+      console.error(`[mail] TENCENT_SES_TEMPLATE_ID 不是正整数: "${templateIdRaw}"，降级到 stub`);
+      instance = new StubMailSender();
+      return instance;
+    }
+    instance = new TencentSesMailSender({ secretId, secretKey, region, fromEmailAddress: from, templateId });
+    const mode = templateId !== undefined ? `Template(${templateId})` : 'Simple';
+    console.log(`[mail] Tencent SES enabled · region=${region} from=${from} mode=${mode}`);
   } else if (kind === 'smtp') {
     const host = process.env.SMTP_HOST;
     const port = Number(process.env.SMTP_PORT || '465');

@@ -55,7 +55,7 @@ auth.post('/request-link', async (c) => {
   // 投递邮件；失败也不返错（避免暴露邮箱存在性 + 用户体验一致）
   try {
     const mail = getMailSender();
-    await mail.send(buildMagicLinkMail({ to: email, link, ttlMin: MAGIC_TTL_MIN }));
+    await mail.send(buildMagicLinkMail({ to: email, link, rawToken, ttlMin: MAGIC_TTL_MIN }));
   } catch (err) {
     console.error('[auth.request-link] mail send failed', err);
   }

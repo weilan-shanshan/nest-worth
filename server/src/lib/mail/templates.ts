@@ -4,13 +4,22 @@ const BRAND = 'Nestworth · 净值';
 
 /**
  * 登录链接邮件。
- * 设计原则：
- *   - 纯文本和 HTML 都给（部分邮件客户端只渲染纯文本）
- *   - 链接显眼但不花哨；不放图片（避免被反垃圾打分）
- *   - 不提"账号""注册"等强 CTA 词（容易触发反垃圾）
- *   - 不带任何资产/金额/Key 字段
+ *
+ * 同一个对象同时塞两套数据：
+ *   - text / html：stub 和 smtp adapter 用（完整链接）
+ *   - templateData：tencent_ses adapter（Template 模式）用，只塞 token + ttl，
+ *     模板里域名硬编码（个人实名账号腾讯云 SES 不允许变量含完整 URL）
+ *
+ * 控制台 SES 模板必须长这样（域名硬编码）：
+ *   <a href="https://nest.weilanshanshan.top/auth/verify?token={{token}}">登录</a>
+ *   链接 {{ttl}} 分钟内有效。
  */
-export function buildMagicLinkMail(opts: { to: string; link: string; ttlMin: number }): MailMessage {
+export function buildMagicLinkMail(opts: {
+  to: string;
+  link: string;         // 完整 URL（text/html 用）
+  rawToken: string;     // 原始 token（SES Template 变量用）
+  ttlMin: number;
+}): MailMessage {
   const subject = `${BRAND} 登录链接`;
   const text = [
     `你好，`,
@@ -38,5 +47,14 @@ export function buildMagicLinkMail(opts: { to: string; link: string; ttlMin: num
   <p style="margin:0;font-size:12px;color:#888;">如果不是你本人请求的登录，忽略即可。</p>
 </body></html>`;
 
-  return { to: opts.to, subject, text, html };
+  return {
+    to: opts.to,
+    subject,
+    text,
+    html,
+    templateData: {
+      token: opts.rawToken,
+      ttl: String(opts.ttlMin)
+    }
+  };
 }
